@@ -6,7 +6,7 @@
         <div class="viz-legend">
             @foreach (var s in Series)
             {
-                <span class="viz-legend-item"><span class="viz-swatch" style="background:@s.Color"></span>@s.Name</span>
+                <span class="viz-legend-item @LineClass(s)"><span class="viz-swatch" style="background:@s.Color"></span>@s.Name</span>
             }
         </div>
     }
@@ -27,9 +27,10 @@
                 <line class="viz-marker" x1="@F(x)" x2="@F(x)" y1="@Top" y2="@F(Height - Bottom)" />
             }
 
-            @foreach (var s in Series)
+            @* La courbe mise en avant est dessinée en dernier, par-dessus les autres. *@
+            @foreach (var s in Series.OrderBy(s => s.Emphasis))
             {
-                <polyline class="viz-line" style="stroke:@s.Color" points="@Points(s)" />
+                <polyline class="viz-line @LineClass(s)" style="stroke:@s.Color" points="@Points(s)" />
             }
 
             @if (_hover is int h)
@@ -63,7 +64,7 @@
         }
         @foreach (var marker in Markers)
         {
-            <span class="viz-marker-label" style="left:@Pct(X(marker.X), Width)">@marker.Label</span>
+            <span class="viz-marker-label @(X(marker.X) / Width > 0.75 ? "flip" : "")" style="left:@Pct(X(marker.X), Width);top:@(marker.Row * 22 - 2)px">@marker.Label</span>
         }
 
         @if (_hover is int hv)
@@ -89,8 +90,12 @@
 </figure>
 
 @code {
-    public sealed record Line(string Name, string Color, IReadOnlyList<(decimal X, decimal Y)> Points);
-    public sealed record Marker(decimal X, string Label);
+    /// <summary>Une série. Si au moins une série a <c>Emphasis</c>, les autres sont estompées.</summary>
+    public sealed record Line(string Name, string Color, IReadOnlyList<(decimal X, decimal Y)> Points, bool Emphasis = false);
+    /// <summary>Repère vertical ; <c>Row</c> décale l'étiquette pour éviter les chevauchements.</summary>
+    public sealed record Marker(decimal X, string Label, int Row = 0);
+
+    private string LineClass(Line s) => !Series.Any(x => x.Emphasis) ? "" : s.Emphasis ? "strong" : "muted";
 
     /// <summary>Toutes les séries doivent partager les mêmes valeurs X.</summary>
     [Parameter, EditorRequired] public IReadOnlyList<Line> Series { get; set; } = [];

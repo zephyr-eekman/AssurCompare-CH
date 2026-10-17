@@ -1,0 +1,192 @@
+@page "/fiche"
+@page "/fiche/{Id:guid}"
+@using AssurCompare.Core.Analyses
+@using AssurCompare.Core.Besoins
+@inject AnalysisStore Store
+@inject ClientProfileState State
+@inject AnalysisService Analyses
+@inject PremiumDataService Data
+@inject IJSRuntime JS
+
+<PageTitle>Fiche client · AssurCompare CH</PageTitle>
+
+<div class="page-header no-print fiche-toolbar">
+    <div>
+        <div class="eyebrow">Mes dossiers</div>
+        <h1>Fiche client</h1>
+        <p>Une page à remettre au client : imprimez-la ou choisissez « Enregistrer au format PDF » dans la fenêtre d'impression.</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        @if (Id is null)
+        {
+            <SaveAnalysisButton />
+        }
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print" OnClick="Print"
+                   Disabled="_summary is null">Imprimer / PDF</MudButton>
+    </div>
+</div>
+
+@if (_notFound)
+{
+    <div class="empty-state">
+        <MudIcon Icon="@Icons.Material.Outlined.FolderOff" Size="Size.Large" />
+        <p>Cette analyse n'existe plus dans ce navigateur.</p>
+        <MudButton Href="analyses" Variant="Variant.Filled" Color="Color.Primary">Mes analyses</MudButton>
+    </div>
+}
+else if (_summary is null || _profile is null)
+{
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="900px" />
+}
+else
+{
+    var s = _summary;
+    var p = _profile;
+    <article class="sheet">
+        <header class="sheet-head">
+            <div class="sheet-brand"><span class="brand-mark">+</span> AssurCompare CH</div>
+            <div class="sheet-title">
+                <h2>Analyse d'assurance@(string.IsNullOrWhiteSpace(p.Name) ? "" : $" · {p.Name}")</h2>
+                <span>Établie le @_date.ToString("dd.MM.yyyy") · primes LAMal @s.PremiumYear</span>
+            </div>
+        </header>
+
+        <section class="sheet-profile">
+            <span>@CantonName(p.Canton)@(p.Region > 0 ? $", région {p.Region}" : "")</span>
+            <span>@p.Age ans</span>
+            <span>@p.Work.Label()@(p.Work == WorkStatus.Salarie ? $", {p.WeeklyHours} h/sem." : "")</span>
+            <span>@p.Housing.Label()</span>
+            @if (p.Children > 0) { <span>@p.Children enfant(s)</span> }
+            <span>frais médicaux estimés @Chf.Format(p.ExpectedHealthCosts, false) / an</span>
+        </section>
+
+        <section class="sheet-kpis">
+            <div class="kpi main">
+                <span>Économie identifiée</span>
+                <strong>@Chf.Format(s.IdentifiedAnnualSaving, false)</strong>
+                <small>par an sur la LAMal</small>
+            </div>
+            <div class="kpi">
+                <span>Franchise conseillée</span>
+                <strong>CHF @Chf.Number(s.RecommendedFranchise ?? 0, false)</strong>
+                <small>pour les frais estimés</small>
+            </div>
+            <div class="kpi">
+                <span>Besoins essentiels couverts</span>
+                <strong>@s.CoverageScore %</strong>
+                <small>@s.PriorityGaps.Count lacune(s) prioritaire(s)</small>
+            </div>
+            <div class="kpi">
+                <span>Lacune à la retraite</span>
+                <strong>@(s.RetirementGapMonthly is decimal g ? Chf.Format(g, false) : "—")</strong>
+                <small>par mois</small>
+            </div>
+        </section>
+
+        <div class="sheet-cols">
+            <section>
+                <h3>Assurance maladie (LAMal)</h3>
+                <dl>
+                    <dt>Situation actuelle</dt>
+                    <dd>@(s.CurrentOffer is null ? "non renseignée" : $"{s.CurrentOffer} · {Chf.Format(s.CurrentAnnualCost ?? 0, false)} / an")</dd>
+                    <dt>Offre conseillée</dt>
+                    <dd>@s.BestOffer (@s.BestOfferModel)</dd>
+                    <dt>Prime et franchise</dt>
+                    <dd>@Chf.Format(s.BestMonthlyPremium ?? 0) / mois · franchise @s.RecommendedFranchise</dd>
+                    <dt>Coût total estimé</dt>
+                    <dd>@Chf.Format(s.BestAnnualCost ?? 0, false) / an (primes + franchise + quote-part)</dd>
+                    @if (s.AccidentRemovalSaving > 0)
+                    {
+                        <dt>Accident</dt>
+                        <dd>déjà couvert par l'employeur : @Chf.Format(s.AccidentRemovalSaving.Value, false) / an à économiser</dd>
+                    }
+                </dl>
+            </section>
+            <section>
+                <h3>Prévoyance</h3>
+                <dl>
+                    @if (s.RetirementProjectedMonthly is decimal projected)
+                    {
+                        <dt>Revenu projeté AVS + LPP</dt><dd>@Chf.Format(projected, false) / mois</dd>
+                        <dt>Objectif</dt><dd>@Chf.Format(s.RetirementTargetMonthly ?? 0, false) / mois (@p.RetirementTargetPct % du salaire)</dd>
+                        <dt>Épargne pour combler</dt>
+                        <dd>
+                            @Chf.Format(s.Annual3aNeeded ?? 0, false) / an
+                            @if (s.Needs3bOrBuyback)
+                            {
+                                <span class="sheet-warn">au-delà du maximum 3a (@Chf.Format(s.Pillar3aMaximum ?? 0, false)) : rachat LPP ou 3b</span>
+                            }
+                        </dd>
+                    }
+                    else
+                    {
+                        <dt>Retraite</dt><dd>non calculée (pas de revenu d'activité)</dd>
+                    }
+                    @if (s.Pillar3aTaxSaving > 0)
+                    {
+                        <dt>Impôts économisés avec un 3a</dt><dd>jusqu'à @Chf.Format(s.Pillar3aTaxSaving.Value, false) / an</dd>
+                    }
+                </dl>
+            </section>
+        </div>
+
+        <section>
+            <h3>Couvertures à mettre en place</h3>
+            @if (s.PriorityGaps.Count == 0)
+            {
+                <p>Les couvertures obligatoires et prioritaires sont en place.</p>
+            }
+            else
+            {
+                <ul class="sheet-gaps">
+                    @foreach (var gap in s.PriorityGaps) { <li>@gap</li> }
+                </ul>
+            }
+        </section>
+
+        <section>
+            <h3>Prochaines étapes</h3>
+            <ol class="sheet-steps">
+                @foreach (var step in s.NextSteps) { <li>@step</li> }
+            </ol>
+        </section>
+
+        <footer class="sheet-foot">
+            Sources : primes @s.PremiumYear de l'Office fédéral de la santé publique (opendata.swiss) ; montants AVS, LPP et 3a 2027 du Conseil fédéral.
+            Estimations indicatives qui ne remplacent pas une offre officielle. AssurCompare CH, projet personnel de Zéphyr Eekman réalisé avec l'aide de l'IA.
+        </footer>
+    </article>
+}
+
+@code {
+    [Parameter] public Guid? Id { get; set; }
+
+    private AnalysisSummary? _summary;
+    private ClientProfile? _profile;
+    private PremiumIndex? _index;
+    private DateTime _date = DateTime.Now;
+    private bool _notFound;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _index = await Data.GetIndexAsync();
+        if (Id is Guid id)
+        {
+            var saved = Store.Get(id);
+            _notFound = saved is null;
+            _summary = saved?.Summary;
+            _profile = saved?.Profile;
+            _date = saved?.CreatedAt ?? DateTime.Now;
+        }
+        else
+        {
+            _summary = await Analyses.BuildCurrentAsync();
+            _profile = State.Profile;
+            _date = DateTime.Now;
+        }
+    }
+
+    private string CantonName(string code) => _index?.Cantons.FirstOrDefault(c => c.Code == code)?.Name ?? code;
+
+    private async Task Print() => await JS.InvokeVoidAsync("print");
+}

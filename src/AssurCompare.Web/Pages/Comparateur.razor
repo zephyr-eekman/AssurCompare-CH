@@ -1,263 +1,221 @@
 @page "/comparateur"
+@using AssurCompare.Core.Analyses
+@implements IDisposable
 @inject PremiumDataService Data
+@inject ClientProfileState State
 
 <PageTitle>Comparateur de primes LAMal · AssurCompare CH</PageTitle>
 
 <div class="page-header">
+    <div class="eyebrow">Santé · étape 1</div>
     <h1>Comparateur de primes LAMal @_index?.Year</h1>
-    <p>Classe toutes les caisses-maladie d'un canton selon le profil de l'assuré, à partir des primes officielles publiées par l'OFSP.</p>
+    <p>Toutes les caisses-maladie du canton, classées pour votre profil à partir des primes officielles de l'OFSP.</p>
 </div>
 
-@if (_index is null)
+<ProfileBar Sections="ProfileSections.Lamal" />
+
+<MudPaper Class="panel mb-4 filters" Outlined>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" sm="4" md="2">
+            <MudSelect T="int" Label="Franchise" @bind-Value="_franchise" @bind-Value:after="Recompute" Variant="Variant.Outlined" Dense>
+                @foreach (var f in LamalRules.Franchises(State.AgeGroup))
+                {
+                    <MudSelectItem Value="f">CHF @f</MudSelectItem>
+                }
+            </MudSelect>
+        </MudItem>
+        <MudItem xs="12" sm="8" md="7">
+            <div class="filter-label"><InfoTip Term="modèle alternatif" Text="Modèles d'assurance" /></div>
+            <MudChipSet T="TariffType" SelectionMode="SelectionMode.MultiSelection" CheckMark Size="Size.Small"
+                        SelectedValues="_types" SelectedValuesChanged="OnTypesChanged" Variant="Variant.Outlined" Color="Color.Primary">
+                @foreach (var t in Enum.GetValues<TariffType>())
+                {
+                    <MudChip Value="t" Text="@t.Label()" />
+                }
+            </MudChipSet>
+        </MudItem>
+        <MudItem xs="12" md="3" Class="d-flex align-center">
+            <MudSwitch T="bool" @bind-Value="_onePerInsurer" @bind-Value:after="Recompute" Color="Color.Primary" Label="Meilleure offre par caisse" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
 {
-    <MudProgressLinear Indeterminate Color="Color.Primary" />
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="160px" Class="mb-3" />
+    <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="380px" />
+}
+else if (_stats is null)
+{
+    <div class="empty-state">
+        <MudIcon Icon="@Icons.Material.Outlined.FilterAltOff" Size="Size.Large" />
+        <p>Aucune offre ne correspond. Cochez au moins un modèle d'assurance pour voir les caisses disponibles.</p>
+    </div>
 }
 else
 {
-    <MudPaper Class="panel mb-4" Outlined>
-        <MudGrid Spacing="3">
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="string" Label="Canton" Value="_canton" ValueChanged="OnCantonChanged" Variant="Variant.Outlined" Dense>
-                    @foreach (var c in _index.Cantons)
-                    {
-                        <MudSelectItem Value="c.Code">@c.Name (@c.Code)</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            @if (Regions.Length > 1)
-            {
-                <MudItem xs="12" sm="6" md="2">
-                    <MudSelect T="int" Label="Région de prime" @bind-Value="_region" @bind-Value:after="Recompute" Variant="Variant.Outlined" Dense
-                               HelperText="Selon la commune">
-                        @foreach (var r in Regions)
+    <MudGrid Spacing="3" Class="mb-4">
+        <MudItem xs="12" md="5">
+            <MudPaper Outlined Class="panel h-100">
+                @if (_reference is not null)
+                {
+                    var saving = _ranked[0].AnnualSavingVsReference ?? 0;
+                    <HeroNumber Label="Économie de prime possible" Value="Math.Max(0, saving)" Unit="/ an" Tone="@(saving > 0 ? "good" : "")">
+                        @if (saving > 0)
                         {
-                            <MudSelectItem Value="r">Région @r</MudSelectItem>
+                            <span>en passant de <strong>@_reference.Insurer.Name</strong> à <strong>@_ranked[0].Offer.Insurer.Name</strong> (@_ranked[0].Offer.Tariff.Name).</span>
                         }
-                    </MudSelect>
-                </MudItem>
-            }
-            <MudItem xs="12" sm="6" md="3">
-                <MudSelect T="AgeGroup" Label="Classe d'âge" Value="_age" ValueChanged="OnAgeChanged" Variant="Variant.Outlined" Dense>
-                    @foreach (var a in Enum.GetValues<AgeGroup>().Reverse())
-                    {
-                        <MudSelectItem Value="a">@a.Label()</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="2">
-                <MudSelect T="int" Label="Franchise" @bind-Value="_franchise" @bind-Value:after="Recompute" Variant="Variant.Outlined" Dense>
-                    @foreach (var f in LamalRules.Franchises(_age))
-                    {
-                        <MudSelectItem Value="f">CHF @f</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="2" Class="d-flex align-center">
-                <MudSwitch T="bool" @bind-Value="_withAccident" @bind-Value:after="Recompute" Color="Color.Primary"
-                           Label="Avec accident" />
-            </MudItem>
-
-            <MudItem xs="12" md="6">
-                <MudText Typo="Typo.caption" Class="muted">Modèles d'assurance</MudText>
-                <MudChipSet T="TariffType" SelectionMode="SelectionMode.MultiSelection" CheckMark
-                            SelectedValues="_types" SelectedValuesChanged="OnTypesChanged" Variant="Variant.Outlined" Color="Color.Primary">
-                    @foreach (var t in Enum.GetValues<TariffType>())
-                    {
-                        <MudChip Value="t" Text="@t.Label()" />
-                    }
-                </MudChipSet>
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3">
-                <MudNumericField T="decimal" Label="Frais médicaux par an" @bind-Value="_expectedCosts" @bind-Value:after="Recompute"
-                                 Min="0" Max="100000" Step="500" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF" />
-            </MudItem>
-            <MudItem xs="12" sm="6" md="3" Class="d-flex align-center">
-                <MudSwitch T="bool" @bind-Value="_onePerInsurer" @bind-Value:after="Recompute" Color="Color.Primary"
-                           Label="Meilleure offre par caisse" />
-            </MudItem>
-
-            <MudItem xs="12">
-                <MudSelect T="string" Label="Caisse actuelle du client (pour calculer l'économie)" @bind-Value="_currentKey" @bind-Value:after="Recompute"
-                           Variant="Variant.Outlined" Dense Clearable>
-                    @foreach (var o in _referenceChoices)
-                    {
-                        <MudSelectItem Value="Key(o)">@o.Insurer.Name · @o.Tariff.Name · @Chf.Format(o.MonthlyPremium)/mois</MudSelectItem>
-                    }
-                </MudSelect>
-            </MudItem>
-        </MudGrid>
-    </MudPaper>
-
-    @if (_loading)
-    {
-        <MudProgressLinear Indeterminate Color="Color.Primary" Class="mb-4" />
-    }
-    else if (_stats is null)
-    {
-        <MudAlert Severity="Severity.Info">Aucune offre ne correspond à ces critères. Essayez d'ajouter des modèles d'assurance.</MudAlert>
-    }
-    else
-    {
-        <MudGrid Spacing="3" Class="mb-4">
-            <MudItem xs="6" md="3">
-                <MudPaper Class="stat" Outlined>
-                    <div class="stat-label">Offre la moins chère</div>
-                    <div class="stat-value">@Chf.Format(_stats.Cheapest)</div>
-                    <div class="stat-sub">par mois · @_ranked[0].Offer.Insurer.Name</div>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="6" md="3">
-                <MudPaper Class="stat" Outlined>
-                    <div class="stat-label">Prime médiane</div>
-                    <div class="stat-value">@Chf.Format(_stats.Median)</div>
-                    <div class="stat-sub">par mois · @_stats.Count offres</div>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="6" md="3">
-                <MudPaper Class="stat" Outlined>
-                    <div class="stat-label">Offre la plus chère</div>
-                    <div class="stat-value">@Chf.Format(_stats.MostExpensive)</div>
-                    <div class="stat-sub">par mois</div>
-                </MudPaper>
-            </MudItem>
-            <MudItem xs="6" md="3">
-                <MudPaper Class="stat" Outlined>
-                    @if (_reference is not null)
-                    {
-                        var saving = _ranked[0].AnnualSavingVsReference ?? 0;
-                        <div class="stat-label">Économie possible pour le client</div>
-                        <div class="stat-value @(saving > 0 ? "good" : "")">@Chf.Format(saving, false)</div>
-                        <div class="stat-sub">par an en changeant pour l'offre n° 1</div>
-                    }
-                    else
-                    {
-                        <div class="stat-label">Écart entre extrêmes</div>
-                        <div class="stat-value">@Chf.Format(_stats.AnnualSpread, false)</div>
-                        <div class="stat-sub">par an, pour la même couverture de base</div>
-                    }
-                </MudPaper>
-            </MudItem>
-        </MudGrid>
-
-        <MudGrid Spacing="3">
-            <MudItem xs="12" md="5">
-                <MudPaper Class="panel" Outlined>
-                    <h2 class="section-title">Combien coûte chaque offre de plus que la n° 1 ?</h2>
-                    <div class="bars" role="list">
-                        @{
-                            var first = _ranked[0].ExpectedTotalCost;
-                            var shown = _ranked.Take(15).ToList();
-                            var max = shown.Max(r => r.ExpectedTotalCost - first);
-                        }
-                        @foreach (var r in shown)
+                        else
                         {
-                            var extra = r.ExpectedTotalCost - first;
-                            var isRef = _reference is not null && Key(r.Offer) == Key(_reference);
-                            <div class="bar-row @(isRef ? "highlight" : "")" role="listitem"
-                                 title="@($"{r.Offer.Insurer.Name} · {r.Offer.Tariff.Name} : {Chf.Format(r.Offer.MonthlyPremium)} par mois")">
-                                <span class="bar-name">@r.Rank. @r.Offer.Insurer.Name @(isRef ? "(actuelle)" : "")</span>
-                                <span class="bar-track"><span class="bar-fill" style="display:block;width:@Width(extra, max)"></span></span>
-                                <span class="bar-value">@(extra == 0 ? "la moins chère" : "+ " + Chf.Number(extra, false))</span>
-                            </div>
+                            <span>Votre caisse actuelle est déjà parmi les moins chères pour cette franchise.</span>
                         }
-                    </div>
-                    <MudText Typo="Typo.caption" Class="muted d-block mt-3">
-                        Surcoût annuel en CHF par rapport à l'offre n° 1 (franchise CHF @_franchise, @(_withAccident ? "avec" : "sans") accident).
-                    </MudText>
-                </MudPaper>
-            </MudItem>
+                    </HeroNumber>
+                }
+                else
+                {
+                    <HeroNumber Label="Écart entre la moins chère et la plus chère" Value="_stats.AnnualSpread" Unit="/ an" Tone="accent">
+                        pour la même couverture de base. Indiquez votre caisse actuelle dans le profil pour voir votre propre économie.
+                    </HeroNumber>
+                }
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudPaper Class="stat" Outlined>
+                <div class="stat-label">La moins chère</div>
+                <div class="stat-value">@Chf.Format(_stats.Cheapest)</div>
+                <div class="stat-sub">par mois · @_ranked[0].Offer.Insurer.Name</div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" md="2">
+            <MudPaper Class="stat" Outlined>
+                <div class="stat-label">Médiane</div>
+                <div class="stat-value">@Chf.Format(_stats.Median)</div>
+                <div class="stat-sub">par mois · @_stats.Count offres</div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="3">
+            <MudPaper Class="stat" Outlined>
+                <div class="stat-label">La plus chère</div>
+                <div class="stat-value">@Chf.Format(_stats.MostExpensive)</div>
+                <div class="stat-sub">par mois</div>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
 
-            <MudItem xs="12" md="7">
-                <MudPaper Outlined>
-                    <MudTable Items="_ranked" Dense Hover Elevation="0" Breakpoint="Breakpoint.Sm" RowsPerPage="10">
-                        <HeaderContent>
-                            <MudTh>#</MudTh>
-                            <MudTh>Caisse</MudTh>
-                            <MudTh>Modèle</MudTh>
-                            <MudTh Class="num">Prime / mois</MudTh>
-                            <MudTh Class="num">Coût total / an</MudTh>
-                            @if (_reference is not null)
-                            {
-                                <MudTh Class="num">Économie / an</MudTh>
-                            }
-                        </HeaderContent>
-                        <RowTemplate>
-                            <MudTd DataLabel="#">@context.Rank</MudTd>
-                            <MudTd DataLabel="Caisse">@context.Offer.Insurer.Name</MudTd>
-                            <MudTd DataLabel="Modèle">
-                                @context.Offer.Tariff.Name
-                                <div class="muted" style="font-size:.75rem">@context.Offer.Tariff.Type.Label()</div>
-                            </MudTd>
-                            <MudTd DataLabel="Prime / mois" Class="num">@Chf.Format(context.Offer.MonthlyPremium)</MudTd>
-                            <MudTd DataLabel="Coût total / an" Class="num">@Chf.Format(context.ExpectedTotalCost, false)</MudTd>
-                            @if (_reference is not null)
-                            {
-                                var s = context.AnnualSavingVsReference ?? 0;
-                                <MudTd DataLabel="Économie / an" Class="@($"num {(s > 0 ? "good" : s < 0 ? "bad" : "")}")">@Chf.Format(s, false)</MudTd>
-                            }
-                        </RowTemplate>
-                        <PagerContent>
-                            <MudTablePager RowsPerPageString="Lignes par page" InfoFormat="{first_item}-{last_item} sur {all_items}" />
-                        </PagerContent>
-                    </MudTable>
-                </MudPaper>
-                <MudText Typo="Typo.caption" Class="muted d-block mt-2">
-                    Coût total = 12 primes + franchise et quote-part pour @Chf.Format(_expectedCosts, false) de frais médicaux.
-                </MudText>
-            </MudItem>
-        </MudGrid>
-    }
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="panel" Outlined>
+                <h2 class="section-title">Combien coûte chaque offre de plus que la n° 1 ?</h2>
+                <div class="bars" role="list">
+                    @{
+                        var first = _ranked[0].ExpectedTotalCost;
+                        var shown = _ranked.Take(15).ToList();
+                        var max = shown.Max(r => r.ExpectedTotalCost - first);
+                    }
+                    @foreach (var r in shown)
+                    {
+                        var extra = r.ExpectedTotalCost - first;
+                        var isRef = _reference is not null && ClientAnalysisBuilder.OfferKey(r.Offer) == ClientAnalysisBuilder.OfferKey(_reference);
+                        <div class="bar-row @(isRef ? "highlight" : "")" role="listitem"
+                             title="@($"{r.Offer.Insurer.Name} · {r.Offer.Tariff.Name} : {Chf.Format(r.Offer.MonthlyPremium)} par mois")">
+                            <span class="bar-name">@r.Rank. @r.Offer.Insurer.Name @(isRef ? "(actuelle)" : "")</span>
+                            <span class="bar-track"><span class="bar-fill" style="width:@Width(extra, max)"></span></span>
+                            <span class="bar-value">@(extra == 0 ? "la moins chère" : "+ " + Chf.Number(extra, false))</span>
+                        </div>
+                    }
+                </div>
+                <div class="caption">Surcoût annuel en CHF par rapport à l'offre n° 1 (franchise @_franchise, @(P.HasAccidentInLamal ? "avec" : "sans") accident).</div>
+            </MudPaper>
+        </MudItem>
+
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined>
+                <MudTable Items="_ranked" Dense Hover Elevation="0" Breakpoint="Breakpoint.Sm" RowsPerPage="10">
+                    <HeaderContent>
+                        <MudTh>#</MudTh>
+                        <MudTh>Caisse</MudTh>
+                        <MudTh>Modèle</MudTh>
+                        <MudTh Class="num">Prime / mois</MudTh>
+                        <MudTh Class="num">Coût total / an</MudTh>
+                        @if (_reference is not null)
+                        {
+                            <MudTh Class="num">Économie / an</MudTh>
+                        }
+                    </HeaderContent>
+                    <RowTemplate>
+                        <MudTd DataLabel="#">@context.Rank</MudTd>
+                        <MudTd DataLabel="Caisse">@context.Offer.Insurer.Name</MudTd>
+                        <MudTd DataLabel="Modèle">
+                            @context.Offer.Tariff.Name
+                            <div class="muted" style="font-size:.75rem">@context.Offer.Tariff.Type.Label()</div>
+                        </MudTd>
+                        <MudTd DataLabel="Prime / mois" Class="num">@Chf.Format(context.Offer.MonthlyPremium)</MudTd>
+                        <MudTd DataLabel="Coût total / an" Class="num">@Chf.Format(context.ExpectedTotalCost, false)</MudTd>
+                        @if (_reference is not null)
+                        {
+                            var s = context.AnnualSavingVsReference ?? 0;
+                            <MudTd DataLabel="Économie / an" Class="@($"num {(s > 0 ? "good" : s < 0 ? "bad" : "")}")">@Chf.Format(s, false)</MudTd>
+                        }
+                    </RowTemplate>
+                    <PagerContent>
+                        <MudTablePager RowsPerPageString="Lignes par page" InfoFormat="{first_item}-{last_item} sur {all_items}" />
+                    </PagerContent>
+                </MudTable>
+            </MudPaper>
+            <div class="caption">
+                <InfoTip Term="coût total" Text="Coût total" /> = 12 primes + franchise et quote-part pour @Chf.Format(P.ExpectedHealthCosts, false) de frais médicaux.
+            </div>
+        </MudItem>
+    </MudGrid>
+
+    <div class="result-footer">
+        <SaveAnalysisButton />
+        <NextStep Href="franchise" Action="Choisir ma franchise">
+            La franchise @_franchise est-elle la bonne pour vous ? Vérifions à partir de combien de frais une autre franchise devient rentable.
+        </NextStep>
+    </div>
 }
 
 @code {
     private PremiumIndex? _index;
     private IReadOnlyList<PremiumOffer> _offers = [];
     private IReadOnlyList<RankedOffer> _ranked = [];
-    private List<PremiumOffer> _referenceChoices = [];
     private PremiumOffer? _reference;
     private PremiumStats? _stats;
     private bool _loading = true;
+    private string? _loadedCanton;
 
-    private string _canton = "NE";
-    private int _region;
-    private AgeGroup _age = AgeGroup.Adulte;
-    private int _franchise = 300;
-    private bool _withAccident = true;
+    private int _franchise;
     private IReadOnlyCollection<TariffType> _types = Enum.GetValues<TariffType>();
-    private decimal _expectedCosts;
     private bool _onePerInsurer = true;
-    private string? _currentKey;
 
-    private int[] Regions => _index?.Cantons.FirstOrDefault(c => c.Code == _canton)?.Regions ?? [0];
+    private Core.Besoins.ClientProfile P => State.Profile;
 
     protected override async Task OnInitializedAsync()
     {
+        State.Changed += OnProfileChanged;
+        _franchise = P.CurrentFranchise ?? LamalRules.DefaultFranchise(State.AgeGroup);
+        if (!P.AcceptsAlternativeModels) _types = [TariffType.Standard];
         _index = await Data.GetIndexAsync();
-        await LoadCanton();
+        await Refresh();
     }
 
-    private async Task OnCantonChanged(string canton)
-    {
-        _canton = canton;
-        _currentKey = null;
-        await LoadCanton();
-    }
+    private void OnProfileChanged() => InvokeAsync(Refresh);
 
-    private async Task LoadCanton()
+    private async Task Refresh()
     {
-        _loading = true;
-        _region = Regions[0];
-        _offers = await Data.GetOffersAsync(_canton);
-        _loading = false;
+        if (_loadedCanton != P.Canton)
+        {
+            _loading = true;
+            StateHasChanged();
+            _offers = await Data.GetOffersAsync(P.Canton);
+            _loadedCanton = P.Canton;
+            _loading = false;
+        }
+        if (!LamalRules.Franchises(State.AgeGroup).Contains(_franchise))
+            _franchise = LamalRules.DefaultFranchise(State.AgeGroup);
         Recompute();
-    }
-
-    private void OnAgeChanged(AgeGroup age)
-    {
-        _age = age;
-        if (!LamalRules.Franchises(age).Contains(_franchise))
-            _franchise = LamalRules.DefaultFranchise(age);
-        Recompute();
+        StateHasChanged();
     }
 
     private void OnTypesChanged(IReadOnlyCollection<TariffType>? types)
@@ -268,14 +226,8 @@ else
 
     private void Recompute()
     {
-        var allModels = new ComparisonQuery(_region, _age, _withAccident, _franchise, Enum.GetValues<TariffType>().ToHashSet());
-        _referenceChoices = PremiumComparer.Filter(_offers, allModels)
-            .OrderBy(o => o.Insurer.Name).ThenBy(o => o.MonthlyPremium)
-            .ToList();
-        _reference = _referenceChoices.FirstOrDefault(o => Key(o) == _currentKey);
-        if (_reference is null) _currentKey = null;
-
-        var query = allModels with { Types = _types.ToHashSet(), ExpectedHealthCosts = _expectedCosts };
+        _reference = ClientAnalysisBuilder.CurrentOffer(P, _offers);
+        var query = new ComparisonQuery(P.Region, State.AgeGroup, P.HasAccidentInLamal, _franchise, _types.ToHashSet(), P.ExpectedHealthCosts);
         IReadOnlyList<RankedOffer> ranked = PremiumComparer.Rank(_offers, query, _reference);
         if (_onePerInsurer)
         {
@@ -286,13 +238,12 @@ else
                 .Select((r, i) => r with { Rank = i + 1 })
                 .ToList();
         }
-
         _ranked = ranked;
         _stats = PremiumComparer.Stats(ranked.ToList());
     }
 
-    private static string Key(PremiumOffer o) => $"{o.Insurer.Id}|{o.Tariff.Code}";
-
     private static string Width(decimal value, decimal max) =>
         (max == 0 ? 0 : value / max * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    public void Dispose() => State.Changed -= OnProfileChanged;
 }

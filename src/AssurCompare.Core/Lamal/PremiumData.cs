@@ -45,6 +45,8 @@ public sealed class PremiumIndex
     public int Year { get; set; }
     public string Source { get; set; } = "";
     public DateOnly GeneratedOn { get; set; }
+    /// <summary>Nombre de primes différentes publiées (toutes combinaisons canton, région, âge, franchise, modèle).</summary>
+    public int PremiumCount { get; set; }
     public List<CantonInfo> Cantons { get; set; } = [];
     public List<InsurerInfo> Insurers { get; set; } = [];
 }

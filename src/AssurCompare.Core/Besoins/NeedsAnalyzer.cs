@@ -33,6 +33,23 @@ public sealed class ClientProfile
     public bool HasLegalProtection { get; set; }
     public bool HasTravelInsurance { get; set; }
     public bool HasChildDental { get; set; }
+
+    // Profil LAMal, partagé par tous les outils
+    public string Canton { get; set; } = "NE";
+    public int Region { get; set; }
+    public decimal ExpectedHealthCosts { get; set; } = 500;
+    public bool AcceptsAlternativeModels { get; set; } = true;
+    /// <summary>Caisse et modèle actuels, au format « numéro OFSP|code tarif ».</summary>
+    public string? CurrentTariffKey { get; set; }
+    public int? CurrentFranchise { get; set; }
+
+    // Prévoyance
+    public decimal AnnualSalary { get; set; } = 60_000;
+    public decimal LppCapital { get; set; }
+    public decimal MarginalTaxRatePct { get; set; } = 20;
+    public decimal RetirementTargetPct { get; set; } = 70;
+
+    public ClientProfile Clone() => (ClientProfile)MemberwiseClone();
 }
 
 public sealed record Recommendation(string Domain, string Title, Priority Priority, string Reason, bool AlreadyCovered)

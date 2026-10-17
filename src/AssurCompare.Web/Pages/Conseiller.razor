@@ -1,0 +1,157 @@
+@page "/conseiller"
+@implements IDisposable
+@inject AnalysisStore Store
+@inject AppModeState Mode
+@inject ClientProfileState State
+@inject NavigationManager Nav
+@inject PremiumDataService Data
+
+<PageTitle>Tableau de bord conseiller · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <div class="eyebrow">Mes dossiers</div>
+    <h1>Tableau de bord conseiller</h1>
+    <p>Préparer le rendez-vous, faire les calculs devant le client, sauvegarder l'analyse et la retrouver.</p>
+</div>
+
+@if (!Mode.IsAdvisor)
+{
+    <MudAlert Severity="Severity.Info" Class="mb-4"
+              ContentAlignment="HorizontalAlignment.Left">
+        Ces outils sont réservés au mode conseiller.
+        <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => Mode.SetModeAsync(AppMode.Conseiller)">Passer en mode conseiller</MudButton>
+    </MudAlert>
+}
+
+<MudGrid Spacing="3" Class="mb-4">
+    <MudItem xs="12" md="4">
+        <MudPaper Outlined Class="panel h-100">
+            <HeroNumber Label="Économie identifiée pour vos clients" Value="TotalSaving" Unit="/ an" Tone="good">
+                sur la LAMal, dans @Store.Items.Count analyse(s) enregistrée(s).
+            </HeroNumber>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="4">
+        <MudPaper Outlined Class="stat">
+            <div class="stat-label">Analyses enregistrées</div>
+            <div class="stat-value"><AnimatedNumber Value="Store.Items.Count" Format="@(v => v.ToString("0"))" /></div>
+            <div class="stat-sub">@(Store.Items.Count == 0 ? "aucune pour l'instant" : $"dernière le {Store.Items.Max(a => a.CreatedAt):dd.MM.yyyy}")</div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="6" md="4">
+        <MudPaper Outlined Class="stat">
+            <div class="stat-label">Couverture moyenne des besoins</div>
+            <div class="stat-value">@(Store.Items.Count == 0 ? "—" : $"{Store.Items.Average(a => a.Summary.CoverageScore):0} %")</div>
+            <div class="stat-sub">besoins essentiels couverts</div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="5">
+        <MudPaper Outlined Class="panel">
+            <h2 class="section-title">Nouveau rendez-vous</h2>
+            <p class="muted">Repartez d'un profil vierge, puis suivez le parcours avec le client.</p>
+            <MudStack Spacing="2" Class="mt-3">
+                <MudButton Variant="Variant.Filled" Color="Color.Secondary" StartIcon="@Icons.Material.Outlined.PersonAdd" OnClick="NewClient">Nouveau client</MudButton>
+                <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Slideshow"
+                           OnClick="Present">Présenter à l'écran</MudButton>
+            </MudStack>
+            <div class="shortcuts">
+                <div><kbd>Ctrl</kbd> + <kbd>K</kbd> chercher un outil ou un client</div>
+                <div><kbd>Échap</kbd> quitter la présentation</div>
+            </div>
+        </MudPaper>
+    </MudItem>
+    <MudItem xs="12" md="7">
+        <MudPaper Outlined Class="panel">
+            <div class="d-flex align-center justify-space-between mb-2">
+                <h2 class="section-title mb-0">Dernières analyses</h2>
+                <MudButton Href="analyses" Variant="Variant.Text" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Toutes</MudButton>
+            </div>
+            @if (Store.Items.Count == 0)
+            {
+                <div class="empty-state small">
+                    <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" />
+                    <p>Aucune analyse enregistrée. Faites le parcours avec un client, puis cliquez sur « Sauvegarder l'analyse ».</p>
+                    <MudButton Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Science" OnClick="AddDemo"
+                               Disabled="_seeding">Ajouter 3 clients fictifs pour la démo</MudButton>
+                </div>
+            }
+            <ul class="recent">
+                @foreach (var a in Store.Items.OrderByDescending(a => a.CreatedAt).Take(5))
+                {
+                    <li>
+                        <a href="@($"fiche/{a.Id}")">
+                            <span class="avatar">@Initials(a.ClientName)</span>
+                            <span class="recent-name">@a.ClientName<small>@a.CreatedAt.ToString("dd.MM.yyyy HH:mm") · @a.Profile.Canton · @a.Profile.Age ans</small></span>
+                            <span class="recent-value good">@Chf.Format(a.Summary.IdentifiedAnnualSaving, false)<small>/ an</small></span>
+                        </a>
+                    </li>
+                }
+            </ul>
+            <div class="caption">Les analyses sont stockées uniquement dans ce navigateur : rien n'est envoyé sur un serveur.</div>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private decimal TotalSaving => Store.Items.Sum(a => a.Summary.IdentifiedAnnualSaving);
+
+    protected override void OnInitialized()
+    {
+        Store.Changed += OnChanged;
+        Mode.Changed += OnChanged;
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task NewClient()
+    {
+        await Mode.SetModeAsync(AppMode.Conseiller);
+        await State.ResetAsync();
+        Nav.NavigateTo("parcours");
+    }
+
+    private async Task Present()
+    {
+        await Mode.SetModeAsync(AppMode.Conseiller);
+        Mode.SetPresenting(true);
+        Nav.NavigateTo("parcours");
+    }
+
+    private bool _seeding;
+
+    /// <summary>Trois profils inventés (noms fictifs) calculés avec les vraies primes, pour montrer le mode conseiller.</summary>
+    private async Task AddDemo()
+    {
+        _seeding = true;
+        var index = await Data.GetIndexAsync();
+        var demo = new (string Name, Core.Besoins.ClientProfile Profile)[]
+        {
+            ("Client fictif A · Neuchâtel", new() { Canton = "NE", Age = 34, AnnualSalary = 72_000, ExpectedHealthCosts = 300,
+                CurrentTariffKey = "8|BASE", CurrentFranchise = 300, HasRcPrivee = true, Children = 1, LivesWithPartner = true }),
+            ("Client fictif B · Lausanne", new() { Canton = "VD", Region = 1, Age = 27, AnnualSalary = 58_000, ExpectedHealthCosts = 0,
+                CurrentTariffKey = "1562|BASE", CurrentFranchise = 300, HasCar = true, HasLeasing = true }),
+            ("Client fictif C · Genève", new() { Canton = "GE", Age = 52, Work = Core.Besoins.WorkStatus.Independant, AnnualSalary = 95_000,
+                ExpectedHealthCosts = 2_500, CurrentTariffKey = "1509|BASE", CurrentFranchise = 1500, HasRcPrivee = true, HasMenage = true }),
+        };
+        foreach (var (name, profile) in demo)
+        {
+            profile.Name = name;
+            var offers = await Data.GetOffersAsync(profile.Canton);
+            var summary = Core.Analyses.ClientAnalysisBuilder.Build(profile, offers, index.Year, Core.Parametres.SwissParameters.Current);
+            await Store.SaveAsync(new Core.Analyses.SavedAnalysis { ClientName = name, Profile = profile, Summary = summary });
+        }
+        _seeding = false;
+    }
+
+    public static string Initials(string name) =>
+        string.Concat(name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Take(2).Select(w => char.ToUpperInvariant(w[0])));
+
+    public void Dispose()
+    {
+        Store.Changed -= OnChanged;
+        Mode.Changed -= OnChanged;
+    }
+}

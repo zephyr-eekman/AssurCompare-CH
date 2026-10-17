@@ -1,0 +1,139 @@
+@page "/analyses"
+@using AssurCompare.Core.Analyses
+@implements IDisposable
+@inject AnalysisStore Store
+@inject ClientProfileState State
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Mes analyses · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <div class="eyebrow">Mes dossiers</div>
+    <h1>Mes analyses</h1>
+    <p>Retrouvez, dupliquez ou supprimez les analyses de vos clients. Tout est stocké dans ce navigateur uniquement.</p>
+</div>
+
+@if (!Store.StorageAvailable)
+{
+    <MudAlert Severity="Severity.Warning" Class="mb-3">
+        Le navigateur bloque le stockage local (navigation privée ?) : les analyses disparaîtront à la fermeture de la page.
+    </MudAlert>
+}
+
+<MudPaper Outlined Class="panel mb-3 filters">
+    <MudGrid Spacing="2">
+        <MudItem xs="12" sm="7">
+            <MudTextField T="string" @bind-Value="_search" Immediate Placeholder="Rechercher un client…" Variant="Variant.Outlined" Margin="Margin.Dense"
+                          Adornment="Adornment.Start" AdornmentIcon="@Icons.Material.Filled.Search" Clearable aria-label="Rechercher un client" />
+        </MudItem>
+        <MudItem xs="12" sm="5">
+            <MudSelect T="string" @bind-Value="_sort" Label="Trier par" Variant="Variant.Outlined" Dense>
+                <MudSelectItem Value="@("recent")">Plus récentes</MudSelectItem>
+                <MudSelectItem Value="@("old")">Plus anciennes</MudSelectItem>
+                <MudSelectItem Value="@("name")">Nom du client</MudSelectItem>
+                <MudSelectItem Value="@("saving")">Économie identifiée</MudSelectItem>
+            </MudSelect>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (Store.Items.Count == 0)
+{
+    <div class="empty-state">
+        <MudIcon Icon="@Icons.Material.Outlined.FolderOpen" Size="Size.Large" />
+        <p>Aucune analyse pour l'instant. Faites le parcours guidé avec un client puis cliquez sur « Sauvegarder l'analyse ».</p>
+        <MudButton Href="parcours" Variant="Variant.Filled" Color="Color.Primary">Démarrer le parcours</MudButton>
+    </div>
+}
+else if (!Filtered.Any())
+{
+    <div class="empty-state small"><p>Aucun client ne correspond à « @_search ».</p></div>
+}
+
+<div class="analysis-list">
+    @foreach (var a in Filtered)
+    {
+        <MudPaper Outlined Class="analysis-card">
+            <div class="analysis-main">
+                <span class="avatar">@Conseiller.Initials(a.ClientName)</span>
+                <div>
+                    <div class="analysis-name">@a.ClientName</div>
+                    <div class="muted analysis-meta">@a.CreatedAt.ToString("dd.MM.yyyy HH:mm") · @a.Profile.Canton · @a.Profile.Age ans · couverture @a.Summary.CoverageScore %</div>
+                </div>
+                <div class="analysis-saving">
+                    <strong class="good">@Chf.Format(a.Summary.IdentifiedAnnualSaving, false)</strong>
+                    <small>par an</small>
+                </div>
+            </div>
+            @if (_confirmDelete == a.Id)
+            {
+                <div class="confirm" role="alert">
+                    <span>Supprimer définitivement l'analyse de <strong>@a.ClientName</strong> ?</span>
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Error" OnClick="() => Delete(a)">Supprimer</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" OnClick="() => _confirmDelete = null">Annuler</MudButton>
+                </div>
+            }
+            else
+            {
+                <div class="analysis-actions">
+                    <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Description"
+                               Href="@($"fiche/{a.Id}")">Fiche</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.OpenInNew"
+                               OnClick="() => Open(a)">Reprendre</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.ContentCopy"
+                               OnClick="() => Duplicate(a)">Dupliquer</MudButton>
+                    <MudButton Size="Size.Small" Variant="Variant.Text" Color="Color.Error" StartIcon="@Icons.Material.Outlined.Delete"
+                               OnClick="() => _confirmDelete = a.Id">Supprimer</MudButton>
+                </div>
+            }
+        </MudPaper>
+    }
+</div>
+
+@code {
+    private string? _search;
+    private string _sort = "recent";
+    private Guid? _confirmDelete;
+
+    private IEnumerable<SavedAnalysis> Filtered
+    {
+        get
+        {
+            var items = Store.Items.Where(a => string.IsNullOrWhiteSpace(_search)
+                                               || a.ClientName.Contains(_search.Trim(), StringComparison.CurrentCultureIgnoreCase));
+            return _sort switch
+            {
+                "old" => items.OrderBy(a => a.CreatedAt),
+                "name" => items.OrderBy(a => a.ClientName, StringComparer.CurrentCultureIgnoreCase),
+                "saving" => items.OrderByDescending(a => a.Summary.IdentifiedAnnualSaving),
+                _ => items.OrderByDescending(a => a.CreatedAt),
+            };
+        }
+    }
+
+    protected override void OnInitialized() => Store.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task Open(SavedAnalysis a)
+    {
+        await State.ReplaceAsync(a.Profile);
+        Nav.NavigateTo("parcours");
+    }
+
+    private async Task Duplicate(SavedAnalysis a)
+    {
+        var copy = await Store.DuplicateAsync(a.Id);
+        if (copy is not null) Snackbar.Add($"Copie créée : {copy.ClientName}", Severity.Info);
+    }
+
+    private async Task Delete(SavedAnalysis a)
+    {
+        _confirmDelete = null;
+        await Store.DeleteAsync(a.Id);
+        Snackbar.Add($"Analyse de {a.ClientName} supprimée.", Severity.Normal);
+    }
+
+    public void Dispose() => Store.Changed -= OnChanged;
+}

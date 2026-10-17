@@ -4,6 +4,7 @@
 <PageTitle>Comparateur d'offres · AssurCompare CH</PageTitle>
 
 <div class="page-header">
+    <div class="eyebrow">Biens et responsabilité · étape 2</div>
     <h1>Comparateur d'offres</h1>
     <p>
         Pour une assurance auto, ménage ou RC, la prime la plus basse n'est pas toujours la meilleure affaire.
@@ -73,17 +74,21 @@
     var best = _results[0];
     var cheapestPremium = _results.MinBy(r => r.Offer.AnnualPremium)!;
 
-    <MudAlert Severity="Severity.Success" Class="mb-4" Icon="@Icons.Material.Outlined.EmojiEvents">
-        <strong>@best.Offer.Name</strong> est l'offre la plus avantageuse sur @_years ans :
-        @Chf.Format(best.TotalExpectedCost, false) au total.
+    <MudPaper Outlined Class="panel mb-4">
         @if (cheapestPremium.Offer != best.Offer)
         {
-            <span>
-                L'offre à la prime la plus basse (@cheapestPremium.Offer.Name) coûterait
-                <strong>@Chf.Format(cheapestPremium.DifferenceVsBest, false)</strong> de plus avec cette hypothèse de sinistres.
-            </span>
+            <HeroNumber Label="Le piège de la prime la plus basse" Value="cheapestPremium.DifferenceVsBest" Unit="@($"sur {_years} ans")" Tone="accent">
+                <strong>@cheapestPremium.Offer.Name</strong> a la prime la plus basse, mais coûterait ce montant de plus que
+                <strong>@best.Offer.Name</strong>, l'offre la plus avantageuse avec cette hypothèse de sinistres.
+            </HeroNumber>
         }
-    </MudAlert>
+        else
+        {
+            <HeroNumber Label="Coût total de l'offre la plus avantageuse" Value="best.TotalExpectedCost" Unit="@($"sur {_years} ans")" Tone="good">
+                <strong>@best.Offer.Name</strong> a la prime la plus basse et reste la meilleure une fois les sinistres comptés.
+            </HeroNumber>
+        }
+    </MudPaper>
 
     <MudGrid Spacing="3">
         <MudItem xs="12" md="5">
@@ -95,7 +100,7 @@
                     {
                         <div class="bar-row @(r.Rank == 1 ? "highlight" : "")" title="@($"Primes {Chf.Format(r.TotalPremiums, false)} + à charge {Chf.Format(r.TotalOutOfPocket, false)}")">
                             <span class="bar-name">@r.Rank. @r.Offer.Name</span>
-                            <span class="bar-track"><span class="bar-fill" style="display:block;width:@Width(r.TotalExpectedCost, max)"></span></span>
+                            <span class="bar-track"><span class="bar-fill" style="width:@Width(r.TotalExpectedCost, max)"></span></span>
                             <span class="bar-value">@Chf.Format(r.TotalExpectedCost, false)</span>
                         </div>
                     }
@@ -141,6 +146,13 @@
             </MudText>
         </MudItem>
     </MudGrid>
+
+    <div class="result-footer">
+        <SaveAnalysisButton />
+        <NextStep Href="fiche" Action="Voir la fiche client">
+            Tout est calculé : retrouvez la comparaison LAMal, la franchise, les lacunes et la prévoyance sur une seule page imprimable.
+        </NextStep>
+    </div>
 }
 
 @code {

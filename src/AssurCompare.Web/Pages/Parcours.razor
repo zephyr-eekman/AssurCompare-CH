@@ -1,0 +1,269 @@
+@page "/parcours"
+@using AssurCompare.Core.Analyses
+@implements IDisposable
+@inject ClientProfileState State
+@inject PremiumDataService Data
+@inject AnalysisService Analyses
+@inject IJSRuntime JS
+
+<PageTitle>Parcours guidé · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <h1>Parcours guidé</h1>
+    <p>Quatre étapes pour passer de « je paie peut-être trop » à un plan d'action concret.</p>
+</div>
+
+<nav class="stepper" aria-label="Étapes du parcours">
+    <div class="stepper-bar"><span style="width:@(_step * 100 / (Steps.Length - 1))%"></span></div>
+    <ol>
+        @for (var i = 0; i < Steps.Length; i++)
+        {
+            var index = i;
+            var state = index < _step ? "done" : index == _step ? "current" : "todo";
+            <li class="@state">
+                <button disabled="@(index > _maxReached)" @onclick="() => GoTo(index)" aria-current="@(index == _step ? "step" : null)">
+                    <span class="stepper-dot">@if (index < _step) { <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" /> } else { @(index + 1) }</span>
+                    <span class="stepper-label">@Steps[index]</span>
+                </button>
+            </li>
+        }
+    </ol>
+</nav>
+
+<div class="step-panel" @key="_step">
+    @switch (_step)
+    {
+        case 0:
+            <MudPaper Outlined Class="panel">
+                <h2 class="section-title">Votre profil</h2>
+                <p class="muted mb-4">Ces informations sont saisies une seule fois : tous les outils les réutilisent ensuite.</p>
+                <ProfileEditor Sections="ProfileSections.Lamal | ProfileSections.Situation" />
+                <MudButton Variant="Variant.Text" Size="Size.Small" Color="Color.Primary" Class="mt-2"
+                           StartIcon="@(_showCoverages ? Icons.Material.Filled.ExpandLess : Icons.Material.Filled.ExpandMore)"
+                           OnClick="() => _showCoverages = !_showCoverages">
+                    Assurances déjà en place (facultatif)
+                </MudButton>
+                <MudCollapse Expanded="_showCoverages">
+                    <ProfileEditor Sections="ProfileSections.Couvertures" />
+                </MudCollapse>
+                <div class="step-actions">
+                    <span class="muted">Rien n'est envoyé : le calcul se fait dans votre navigateur.</span>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large" EndIcon="@Icons.Material.Filled.ArrowForward"
+                               OnClick="() => GoTo(1)">Voir mes résultats</MudButton>
+                </div>
+            </MudPaper>
+            break;
+
+        case 1:
+            @if (_summary is null)
+            {
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="180px" Class="mb-3" />
+                <MudSkeleton SkeletonType="SkeletonType.Rectangle" Height="260px" />
+            }
+            else if (_summary.BestOffer is null)
+            {
+                <MudAlert Severity="Severity.Info">Aucune offre trouvée pour ce profil. Vérifiez le canton et l'âge à l'étape 1.</MudAlert>
+            }
+            else
+            {
+                <MudGrid Spacing="3">
+                    <MudItem xs="12" md="5">
+                        <MudPaper Outlined Class="panel h-100">
+                            @if (_summary.AnnualSaving > 0)
+                            {
+                                <HeroNumber Label="Économie possible chaque année" Value="_summary.AnnualSaving.Value" Tone="good">
+                                    en passant de <strong>@_summary.CurrentOffer</strong> à <strong>@_summary.BestOffer</strong>
+                                    avec la franchise @_summary.RecommendedFranchise.
+                                </HeroNumber>
+                                <div class="before-after" aria-label="Coût total annuel avant et après">
+                                    @{ var maxCost = Math.Max(_summary.CurrentAnnualCost ?? 0, _summary.BestAnnualCost ?? 0); }
+                                    <div class="ba-row">
+                                        <span>Aujourd'hui</span>
+                                        <span class="ba-track"><span class="ba-fill now" style="width:@Pct(_summary.CurrentAnnualCost ?? 0, maxCost)"></span></span>
+                                        <strong>@Chf.Format(_summary.CurrentAnnualCost ?? 0, false)</strong>
+                                    </div>
+                                    <div class="ba-row">
+                                        <span>Conseillé</span>
+                                        <span class="ba-track"><span class="ba-fill best" style="width:@Pct(_summary.BestAnnualCost ?? 0, maxCost)"></span></span>
+                                        <strong>@Chf.Format(_summary.BestAnnualCost ?? 0, false)</strong>
+                                    </div>
+                                    <div class="caption">Coût total par an : primes + franchise + quote-part pour @Chf.Format(State.Profile.ExpectedHealthCosts, false) de frais.</div>
+                                </div>
+                            }
+                            else
+                            {
+                                <HeroNumber Label="Votre meilleur coût total par an" Value="_summary.BestAnnualCost ?? 0" Tone="accent">
+                                    avec <strong>@_summary.BestOffer</strong> et la franchise @_summary.RecommendedFranchise,
+                                    pour @Chf.Format(State.Profile.ExpectedHealthCosts, false) de frais médicaux.
+                                    @if (_summary.CurrentOffer is null)
+                                    {
+                                        <span>Indiquez votre caisse actuelle à l'étape 1 pour voir votre économie.</span>
+                                    }
+                                </HeroNumber>
+                            }
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" md="7">
+                        <MudPaper Outlined Class="panel">
+                            <h2 class="section-title">Les 5 offres les plus avantageuses pour vous</h2>
+                            <ol class="rank-list">
+                                @foreach (var r in _top)
+                                {
+                                    <li>
+                                        <span class="rank">@r.Rank</span>
+                                        <span class="rank-name">@r.Offer.Insurer.Name<small>@r.Offer.Tariff.Name · @r.Offer.Tariff.Type.Label()</small></span>
+                                        <span class="rank-value">@Chf.Format(r.Offer.MonthlyPremium)<small>/ mois</small></span>
+                                    </li>
+                                }
+                            </ol>
+                            <div class="muted mt-2" style="font-size:.8rem">
+                                Franchise @_summary.RecommendedFranchise, classées selon le <InfoTip Term="coût total" />.
+                                <a href="comparateur">Voir toutes les offres</a>
+                            </div>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+                <div class="step-actions">
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="() => GoTo(0)">Modifier le profil</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large" EndIcon="@Icons.Material.Filled.ArrowForward"
+                               OnClick="() => GoTo(2)">Voir mes recommandations</MudButton>
+                </div>
+            }
+            break;
+
+        case 2:
+            @if (_summary is not null)
+            {
+                <MudGrid Spacing="3" Class="mb-3">
+                    <MudItem xs="12" sm="4">
+                        <MudPaper Outlined Class="stat">
+                            <div class="stat-label"><InfoTip Term="franchise" Text="Franchise conseillée" /></div>
+                            <div class="stat-value">CHF @Chf.Number(_summary.RecommendedFranchise ?? 0, false)</div>
+                            <div class="stat-sub"><a href="franchise">Voir le détail</a></div>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudPaper Outlined Class="stat">
+                            <div class="stat-label">Couverture des besoins essentiels</div>
+                            <div class="stat-value @(_summary.CoverageScore >= 80 ? "good" : _summary.CoverageScore < 50 ? "bad" : "")">@_summary.CoverageScore %</div>
+                            <div class="stat-sub"><a href="besoins">Voir l'analyse</a></div>
+                        </MudPaper>
+                    </MudItem>
+                    <MudItem xs="12" sm="4">
+                        <MudPaper Outlined Class="stat">
+                            <div class="stat-label"><InfoTip Term="lacune de prévoyance" Text="Lacune à la retraite" /></div>
+                            <div class="stat-value">@(_summary.RetirementGapMonthly is decimal g ? Chf.Format(g, false) : "—")</div>
+                            <div class="stat-sub">par mois · <a href="prevoyance">Voir le calcul</a></div>
+                        </MudPaper>
+                    </MudItem>
+                </MudGrid>
+
+                <MudPaper Outlined Class="panel">
+                    <h2 class="section-title">Votre plan d'action</h2>
+                    @if (_summary.NextSteps.Count == 0)
+                    {
+                        <MudAlert Severity="Severity.Success">Tout semble en ordre avec ces informations.</MudAlert>
+                    }
+                    <ol class="action-list">
+                        @foreach (var step in _summary.NextSteps)
+                        {
+                            <li>@step</li>
+                        }
+                    </ol>
+                </MudPaper>
+                <div class="step-actions">
+                    <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Filled.ArrowBack" OnClick="() => GoTo(1)">Résultats</MudButton>
+                    <MudButton Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large" EndIcon="@Icons.Material.Filled.ArrowForward"
+                               OnClick="() => GoTo(3)">Récapitulatif</MudButton>
+                </div>
+            }
+            break;
+
+        default:
+            @if (_summary is not null)
+            {
+                <MudPaper Outlined Class="panel recap">
+                    <div class="recap-head">
+                        <div>
+                            <h2 class="section-title">Récapitulatif@(string.IsNullOrWhiteSpace(State.Profile.Name) ? "" : $" pour {State.Profile.Name}")</h2>
+                            <p class="muted">@State.Profile.Age ans · @State.Profile.Canton · primes @_summary.PremiumYear</p>
+                        </div>
+                        <div class="recap-total">
+                            <span>Économie identifiée</span>
+                            <strong class="good"><AnimatedNumber Value="_summary.IdentifiedAnnualSaving" /></strong>
+                            <small>par an sur la LAMal</small>
+                        </div>
+                    </div>
+                    <dl class="recap-grid">
+                        <dt>Offre conseillée</dt><dd>@_summary.BestOffer (@_summary.BestOfferModel), franchise @_summary.RecommendedFranchise</dd>
+                        <dt>Coût total estimé</dt><dd>@Chf.Format(_summary.BestAnnualCost ?? 0, false) par an</dd>
+                        @if (_summary.CurrentOffer is not null)
+                        {
+                            <dt>Situation actuelle</dt><dd>@_summary.CurrentOffer : @Chf.Format(_summary.CurrentAnnualCost ?? 0, false) par an</dd>
+                        }
+                        <dt>Lacunes prioritaires</dt><dd>@(_summary.PriorityGaps.Count == 0 ? "aucune" : string.Join(", ", _summary.PriorityGaps))</dd>
+                        @if (_summary.RetirementGapMonthly is decimal gap)
+                        {
+                            <dt>Retraite</dt><dd>lacune de @Chf.Format(gap, false) par mois@(_summary.Annual3aNeeded > 0 ? $", soit environ {Chf.Format(_summary.Annual3aNeeded.Value, false)} de 3a par an" : "")</dd>
+                        }
+                    </dl>
+                    <div class="step-actions">
+                        <MudButton Variant="Variant.Text" StartIcon="@Icons.Material.Outlined.RestartAlt" OnClick="Restart">Nouveau profil</MudButton>
+                        <div class="d-flex gap-2 flex-wrap align-center">
+                            <SaveAnalysisButton />
+                            <MudButton Href="fiche" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.PictureAsPdf">Fiche PDF</MudButton>
+                        </div>
+                    </div>
+                </MudPaper>
+            }
+            break;
+    }
+</div>
+
+@code {
+    private static readonly string[] Steps = ["Profil", "Résultats", "Recommandations", "Récapitulatif"];
+
+    private int _step;
+    private int _maxReached;
+    private bool _showCoverages;
+    private AnalysisSummary? _summary;
+    private IReadOnlyList<RankedOffer> _top = [];
+
+    protected override void OnInitialized() => State.Changed += OnProfileChanged;
+
+    private void OnProfileChanged() => _summary = null;
+
+    private async Task GoTo(int step)
+    {
+        _step = step;
+        _maxReached = Math.Max(_maxReached, step);
+        if (step > 0 && _summary is null) await Compute();
+        await JS.InvokeVoidAsync("assurApp.scrollToTop");
+    }
+
+    private async Task Compute()
+    {
+        _summary = await Analyses.BuildCurrentAsync();
+        if (_summary.RecommendedFranchise is not int franchise) { _top = []; return; }
+
+        var p = State.Profile;
+        var offers = await Data.GetOffersAsync(p.Canton);
+        var types = p.AcceptsAlternativeModels ? Enum.GetValues<TariffType>().ToHashSet() : [TariffType.Standard];
+        var query = new ComparisonQuery(p.Region, State.AgeGroup, p.HasAccidentInLamal, franchise, types, p.ExpectedHealthCosts);
+        _top = PremiumComparer.Rank(offers, query)
+            .GroupBy(r => r.Offer.Insurer.Id).Select(g => g.First())
+            .Take(5).Select((r, i) => r with { Rank = i + 1 }).ToList();
+    }
+
+    private static string Pct(decimal value, decimal max) =>
+        (max == 0 ? 0 : value / max * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+
+    private async Task Restart()
+    {
+        await State.ResetAsync();
+        _maxReached = 0;
+        await GoTo(0);
+    }
+
+    public void Dispose() => State.Changed -= OnProfileChanged;
+}

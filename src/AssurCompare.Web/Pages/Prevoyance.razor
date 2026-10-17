@@ -1,0 +1,173 @@
+@page "/prevoyance"
+@using AssurCompare.Core.Besoins
+@using AssurCompare.Core.Parametres
+@using AssurCompare.Core.Prevoyance
+@implements IDisposable
+@inject ClientProfileState State
+
+<PageTitle>Lacune de prévoyance · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <div class="eyebrow">Prévoyance · étape 1</div>
+    <h1>Lacune de prévoyance</h1>
+    <p>
+        À la retraite, l'AVS (1<sup>er</sup> pilier) et la LPP (2<sup>e</sup> pilier) remplacent le salaire, mais rarement en entier.
+        Cet outil estime la <InfoTip Term="lacune de prévoyance" /> et l'épargne <InfoTip Term="3a" /> qui permettrait de la combler.
+    </p>
+</div>
+
+<ProfileBar Sections="ProfileSections.Situation" />
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudPaper Class="panel" Outlined>
+            <h2 class="section-title">Hypothèses</h2>
+            <MudStack Spacing="3">
+                <MudNumericField T="int" Label="Âge" @bind-Value="P.Age" @bind-Value:after="Save" Min="18" Max="64"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudNumericField T="decimal" Label="Salaire annuel brut" @bind-Value="P.AnnualSalary" @bind-Value:after="Save"
+                                 Min="0" Step="5000" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF" />
+                <MudNumericField T="decimal" Label="Avoir LPP actuel" @bind-Value="P.LppCapital" @bind-Value:after="Save"
+                                 Min="0" Step="5000" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF"
+                                 HelperText="Sur le certificat de prévoyance, sinon 0" />
+                <div>
+                    <div class="filter-label">Revenu souhaité à la retraite : <strong>@P.RetirementTargetPct % du salaire</strong></div>
+                    <MudSlider T="decimal" @bind-Value="P.RetirementTargetPct" @bind-Value:after="Save" Min="50" Max="100" Step="5" Color="Color.Primary"
+                               aria-label="Revenu souhaité en pourcentage du salaire" />
+                    <div class="muted" style="font-size:.75rem">On vise souvent 60 à 80 % du dernier salaire.</div>
+                </div>
+                <MudNumericField T="int" Label="Années de retraite à financer" @bind-Value="_yearsInRetirement" @bind-Value:after="Recompute"
+                                 Min="5" Max="35" Variant="Variant.Outlined" Margin="Margin.Dense" />
+                <MudNumericField T="decimal" Label="Rendement du 3a" @bind-Value="_return" @bind-Value:after="Recompute"
+                                 Min="0" Max="8" Step="0.5m" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentText="%" />
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        @if (_result is null)
+        {
+            <div class="empty-state">
+                <MudIcon Icon="@Icons.Material.Outlined.Elderly" Size="Size.Large" />
+                <p>Indiquez un âge inférieur à 65 ans et un salaire pour estimer la lacune.</p>
+            </div>
+        }
+        else
+        {
+            <MudPaper Outlined Class="panel mb-3">
+                @if (_result.HasGap)
+                {
+                    <HeroNumber Label="Lacune estimée à la retraite" Value="_result.GapMonthly" Unit="/ mois" Tone="accent">
+                        Pour vivre avec @Chf.Format(_result.TargetMonthly, false) par mois, il manquerait @Chf.Format(_result.GapMonthly, false)
+                        après l'AVS et la LPP. Un 3a d'environ <strong>@Chf.Format(_result.Annual3aNeeded, false) par an</strong> pendant
+                        @_result.YearsToRetirement ans permettrait de la combler.
+                    </HeroNumber>
+                }
+                else
+                {
+                    <HeroNumber Label="Pas de lacune avec ces hypothèses" Value="_result.ProjectedMonthly" Unit="/ mois" Tone="good">
+                        L'AVS et la LPP couvrent l'objectif de @Chf.Format(_result.TargetMonthly, false) par mois.
+                    </HeroNumber>
+                }
+
+                <div class="pension-bar" role="img"
+                     aria-label="@($"AVS {Chf.Format(_result.AvsMonthlyWithThirteenth, false)}, LPP {Chf.Format(_result.LppMonthly, false)}, lacune {Chf.Format(_result.GapMonthly, false)}, objectif {Chf.Format(_result.TargetMonthly, false)} par mois")">
+                    <span class="seg avs" style="width:@Pct(_result.AvsMonthlyWithThirteenth)"></span>
+                    <span class="seg lpp" style="width:@Pct(_result.LppMonthly)"></span>
+                    <span class="seg gap" style="width:@Pct(_result.GapMonthly)"></span>
+                    <span class="target" style="left:@Pct(_result.TargetMonthly)"><span>Objectif</span></span>
+                </div>
+                <div class="pension-legend">
+                    <span><i class="avs"></i>AVS avec <InfoTip Term="13e rente" /> : @Chf.Format(_result.AvsMonthlyWithThirteenth, false)</span>
+                    <span><i class="lpp"></i>LPP : @Chf.Format(_result.LppMonthly, false)</span>
+                    @if (_result.HasGap)
+                    {
+                        <span><i class="gap"></i>Lacune : @Chf.Format(_result.GapMonthly, false)</span>
+                    }
+                </div>
+            </MudPaper>
+
+            <MudPaper Outlined Class="table-scroll">
+                <MudSimpleTable Dense Elevation="0">
+                    <tbody>
+                        <tr><td>Rente AVS (carrière complète)</td><td class="num">@Chf.Format(_result.AvsMonthly, false) / mois</td></tr>
+                        <tr><td>Avec la <InfoTip Term="13e rente" /> (moyenne mensuelle)</td><td class="num">@Chf.Format(_result.AvsMonthlyWithThirteenth, false) / mois</td></tr>
+                        <tr><td><InfoTip Term="salaire coordonné" Text="Salaire coordonné LPP" /></td><td class="num">@Chf.Format(_result.CoordinatedSalary, false) / an</td></tr>
+                        <tr><td>Capital LPP projeté à 65 ans (<InfoTip Term="bonifications" />, intérêt @P_.LppMinInterestPct %)</td><td class="num">@Chf.Format(_result.LppCapitalAtRetirement, false)</td></tr>
+                        <tr><td>Rente LPP (<InfoTip Term="taux de conversion" /> @P_.LppConversionRatePct %)</td><td class="num">@Chf.Format(_result.LppMonthly, false) / mois</td></tr>
+                        <tr class="row-best"><td>Revenu projeté AVS + LPP</td><td class="num">@Chf.Format(_result.ProjectedMonthly, false) / mois</td></tr>
+                        <tr><td>Objectif (@P.RetirementTargetPct % du salaire)</td><td class="num">@Chf.Format(_result.TargetMonthly, false) / mois</td></tr>
+                        <tr><td>Capital à réunir pour @_yearsInRetirement ans de retraite</td><td class="num">@Chf.Format(_result.CapitalNeeded, false)</td></tr>
+                        <tr><td>Épargne 3a nécessaire (rendement @_return %)</td><td class="num"><strong>@Chf.Format(_result.Annual3aNeeded, false) / an</strong></td></tr>
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+
+            @if (_result.Exceeds3aMaximum)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mt-3">
+                    C'est plus que le maximum 3a @P_.Year (@Chf.Format(_result.Pillar3aMaximum, false)) : il faudrait compléter
+                    par un rachat LPP ou une épargne libre (3b).
+                </MudAlert>
+            }
+
+            <div class="caption">
+                Estimation pour une personne seule, carrière AVS complète, LPP minimum légal et salaire constant. Paramètres @P_.Year : @P_.Source.
+            </div>
+
+            <div class="result-footer">
+                <SaveAnalysisButton />
+                <NextStep Href="@($"pilier-3a?versement={Math.Min(_result.Annual3aNeeded, _result.Pillar3aMaximum):0}")" Action="Simuler le 3e pilier">
+                    @if (_result.HasGap)
+                    {
+                        <span>Voyons ce qu'un 3a de @Chf.Format(Math.Min(_result.Annual3aNeeded, _result.Pillar3aMaximum), false) par an rapporte, impôts économisés compris.</span>
+                    }
+                    else
+                    {
+                        <span>Même sans lacune, le 3a fait économiser des impôts chaque année. Simulons-le.</span>
+                    }
+                </NextStep>
+            </div>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private static readonly SwissYearParameters P_ = SwissParameters.Current;
+
+    private int _yearsInRetirement = 20;
+    private decimal _return = 2m;
+    private RetirementResult? _result;
+
+    private ClientProfile P => State.Profile;
+
+    protected override void OnInitialized()
+    {
+        State.Changed += OnProfileChanged;
+        Recompute();
+    }
+
+    private void OnProfileChanged() => InvokeAsync(() => { Recompute(); StateHasChanged(); });
+
+    private async Task Save()
+    {
+        await State.NotifyChangedAsync();
+    }
+
+    private void Recompute()
+    {
+        if (P.Age >= SwissParameters.RetirementAge || P.AnnualSalary <= 0) { _result = null; return; }
+
+        var affiliated = P.Work != WorkStatus.Independant && P.HasPensionFund;
+        _result = RetirementGapCalculator.Calculate(
+            new RetirementInput(P.Age, P.AnnualSalary, P.LppCapital, P.RetirementTargetPct, _yearsInRetirement, _return, affiliated), P_);
+    }
+
+    private string Pct(decimal monthly)
+    {
+        var scale = Math.Max(_result!.TargetMonthly, _result.ProjectedMonthly + _result.GapMonthly) * 1.08m;
+        return (scale == 0 ? 0 : monthly / scale * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+    }
+
+    public void Dispose() => State.Changed -= OnProfileChanged;
+}

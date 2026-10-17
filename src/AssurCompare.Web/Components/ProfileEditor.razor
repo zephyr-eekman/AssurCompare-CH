@@ -1,0 +1,232 @@
+@* Formulaire du profil partagé. Chaque modification est enregistrée et vue par tous les outils. *@
+@using AssurCompare.Core.Besoins
+@using AssurCompare.Core.Analyses
+@implements IDisposable
+@inject ClientProfileState State
+@inject PremiumDataService Data
+@inject AppModeState Mode
+
+@if (Sections.HasFlag(ProfileSections.Lamal))
+{
+    <fieldset class="form-section">
+        <legend>Santé (LAMal)</legend>
+        <MudGrid Spacing="2">
+            @if (Mode.IsAdvisor)
+            {
+                <MudItem xs="12">
+                    <MudTextField T="string" Label="Nom du client" @bind-Value="P.Name" @bind-Value:after="Changed"
+                                  Variant="Variant.Outlined" Margin="Margin.Dense" Placeholder="Ex. Mme Dupont" />
+                </MudItem>
+            }
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" Label="Canton de domicile" Value="P.Canton" ValueChanged="OnCantonChanged"
+                           Variant="Variant.Outlined" Dense Disabled="_index is null">
+                    @foreach (var c in _index?.Cantons ?? [])
+                    {
+                        <MudSelectItem Value="c.Code">@c.Name (@c.Code)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (Regions.Length > 1)
+            {
+                <MudItem xs="6" sm="3">
+                    <MudSelect T="int" Label="Région de prime" @bind-Value="P.Region" @bind-Value:after="OnLamalChanged" Variant="Variant.Outlined" Dense
+                               HelperText="Selon la commune">
+                        @foreach (var r in Regions)
+                        {
+                            <MudSelectItem Value="r">Région @r</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="6" sm="3">
+                <MudNumericField T="int" Label="Âge" @bind-Value="P.Age" @bind-Value:after="OnLamalChanged" Min="0" Max="110"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" HelperText="@State.AgeGroup.Label()" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudNumericField T="decimal" Label="Frais médicaux estimés par an" @bind-Value="P.ExpectedHealthCosts" @bind-Value:after="Changed"
+                                 Min="0" Max="100000" Step="250" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Adornment="Adornment.Start" AdornmentText="CHF" HelperText="Médecin, médicaments, examens… 0 si en bonne santé" />
+            </MudItem>
+            <MudItem xs="12" sm="6" Class="d-flex flex-column justify-center">
+                <MudSwitch T="bool" @bind-Value="P.HasAccidentInLamal" @bind-Value:after="OnLamalChanged" Color="Color.Primary">
+                    <InfoTip Term="accident" Text="Accident inclus dans la LAMal" />
+                </MudSwitch>
+                <MudSwitch T="bool" @bind-Value="P.AcceptsAlternativeModels" @bind-Value:after="Changed" Color="Color.Primary">
+                    <InfoTip Term="modèle alternatif" Text="Ouvert aux modèles alternatifs" />
+                </MudSwitch>
+            </MudItem>
+            <MudItem xs="12" sm="8">
+                <MudSelect T="string" Label="Caisse et modèle actuels (facultatif)" @bind-Value="P.CurrentTariffKey" @bind-Value:after="Changed"
+                           Variant="Variant.Outlined" Dense Clearable HelperText="Pour calculer l'économie possible">
+                    @foreach (var t in _currentChoices)
+                    {
+                        <MudSelectItem Value="t.Key">@t.Label</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="4">
+                <MudSelect T="int?" Label="Franchise actuelle" @bind-Value="P.CurrentFranchise" @bind-Value:after="Changed"
+                           Variant="Variant.Outlined" Dense Clearable>
+                    @foreach (var f in LamalRules.Franchises(State.AgeGroup))
+                    {
+                        <MudSelectItem T="int?" Value="f">CHF @f</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+    </fieldset>
+}
+
+@if (Sections.HasFlag(ProfileSections.Situation))
+{
+    <fieldset class="form-section">
+        <legend>Situation</legend>
+        <MudGrid Spacing="2">
+            <MudItem xs="12" sm="6">
+                <MudSelect T="WorkStatus" Label="Activité" @bind-Value="P.Work" @bind-Value:after="Changed" Variant="Variant.Outlined" Dense>
+                    @foreach (var w in Enum.GetValues<WorkStatus>())
+                    {
+                        <MudSelectItem Value="w">@w.Label()</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (P.Work == WorkStatus.Salarie)
+            {
+                <MudItem xs="6" sm="3">
+                    <MudNumericField T="int" Label="Heures / semaine" @bind-Value="P.WeeklyHours" @bind-Value:after="Changed" Min="0" Max="60"
+                                     Variant="Variant.Outlined" Margin="Margin.Dense" />
+                </MudItem>
+            }
+            <MudItem xs="6" sm="3">
+                <MudNumericField T="int" Label="Enfants" @bind-Value="P.Children" @bind-Value:after="Changed" Min="0" Max="10"
+                                 Variant="Variant.Outlined" Margin="Margin.Dense" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="HousingStatus" Label="Logement" @bind-Value="P.Housing" @bind-Value:after="Changed" Variant="Variant.Outlined" Dense>
+                    @foreach (var h in Enum.GetValues<HousingStatus>())
+                    {
+                        <MudSelectItem Value="h">@h.Label()</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudNumericField T="decimal" Label="Salaire annuel brut" @bind-Value="P.AnnualSalary" @bind-Value:after="Changed"
+                                 Min="0" Max="1000000" Step="5000" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Adornment="Adornment.Start" AdornmentText="CHF" />
+            </MudItem>
+            <MudItem xs="12" Class="check-grid">
+                <MudCheckBox T="bool" @bind-Value="P.LivesWithPartner" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Vit en couple" />
+                <MudCheckBox T="bool" @bind-Value="P.HasCar" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Voiture" />
+                @if (P.HasCar)
+                {
+                    <MudCheckBox T="bool" @bind-Value="P.HasLeasing" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="En leasing" />
+                }
+                <MudCheckBox T="bool" @bind-Value="P.HasMotorbike" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Moto" />
+                <MudCheckBox T="bool" @bind-Value="P.TravelsAbroad" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Voyage souvent" />
+                @if (P.Work == WorkStatus.Salarie)
+                {
+                    <MudCheckBox T="bool" @bind-Value="P.HasPensionFund" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Caisse de pension (2e pilier)" />
+                }
+            </MudItem>
+        </MudGrid>
+    </fieldset>
+}
+
+@if (Sections.HasFlag(ProfileSections.Couvertures))
+{
+    <fieldset class="form-section">
+        <legend>Assurances déjà en place</legend>
+        <div class="check-grid">
+            <MudCheckBox T="bool" @bind-Value="P.HasRcPrivee" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="RC privée" />
+            <MudCheckBox T="bool" @bind-Value="P.HasMenage" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Ménage" />
+            @if (P.Housing == HousingStatus.Proprietaire)
+            {
+                <MudCheckBox T="bool" @bind-Value="P.HasBatiment" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Bâtiment" />
+            }
+            @if (P.HasCar)
+            {
+                <MudCheckBox T="bool" @bind-Value="P.HasCasco" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Casco" />
+            }
+            <MudCheckBox T="bool" @bind-Value="P.Has3a" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Pilier 3a" />
+            <MudCheckBox T="bool" @bind-Value="P.HasRiskLifeInsurance" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Risque décès / invalidité" />
+            @if (P.Work == WorkStatus.Independant)
+            {
+                <MudCheckBox T="bool" @bind-Value="P.HasLossOfEarnings" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Perte de gain maladie" />
+            }
+            @if (P.Children > 0)
+            {
+                <MudCheckBox T="bool" @bind-Value="P.HasChildDental" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Dentaire enfants" />
+            }
+            <MudCheckBox T="bool" @bind-Value="P.HasLegalProtection" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Protection juridique" />
+            @if (P.TravelsAbroad)
+            {
+                <MudCheckBox T="bool" @bind-Value="P.HasTravelInsurance" @bind-Value:after="Changed" Color="Color.Primary" Dense Label="Assurance voyage" />
+            }
+        </div>
+    </fieldset>
+}
+
+@code {
+    [Parameter] public ProfileSections Sections { get; set; } = ProfileSections.Lamal;
+
+    private sealed record Choice(string Key, string Label);
+
+    private PremiumIndex? _index;
+    private IReadOnlyList<PremiumOffer> _offers = [];
+    private List<Choice> _currentChoices = [];
+
+    private ClientProfile P => State.Profile;
+
+    private int[] Regions => _index?.Cantons.FirstOrDefault(c => c.Code == P.Canton)?.Regions ?? [0];
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnStateChanged;
+        _index = await Data.GetIndexAsync();
+        await LoadOffers();
+    }
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    private async Task OnCantonChanged(string canton)
+    {
+        P.Canton = canton;
+        P.CurrentTariffKey = null;
+        await LoadOffers();
+        await State.NotifyChangedAsync();
+    }
+
+    private async Task LoadOffers()
+    {
+        if (!Regions.Contains(P.Region)) P.Region = Regions[0];
+        _offers = await Data.GetOffersAsync(P.Canton);
+        RefreshChoices();
+    }
+
+    private async Task OnLamalChanged()
+    {
+        if (P.CurrentFranchise is int f && !LamalRules.Franchises(State.AgeGroup).Contains(f))
+            P.CurrentFranchise = null;
+        RefreshChoices();
+        await State.NotifyChangedAsync();
+    }
+
+    private void RefreshChoices()
+    {
+        var age = State.AgeGroup;
+        _currentChoices = _offers
+            .Where(o => o.Region == P.Region && o.Age == age && o.WithAccident == P.HasAccidentInLamal)
+            .GroupBy(ClientAnalysisBuilder.OfferKey)
+            .Select(g => g.First())
+            .OrderBy(o => o.Insurer.Name).ThenBy(o => o.Tariff.Name)
+            .Select(o => new Choice(ClientAnalysisBuilder.OfferKey(o), $"{o.Insurer.Name} · {o.Tariff.Name}"))
+            .ToList();
+        if (P.CurrentTariffKey is not null && _currentChoices.All(c => c.Key != P.CurrentTariffKey))
+            P.CurrentTariffKey = null;
+    }
+
+    private Task Changed() => State.NotifyChangedAsync();
+
+    public void Dispose() => State.Changed -= OnStateChanged;
+}

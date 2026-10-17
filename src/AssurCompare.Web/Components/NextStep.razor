@@ -1,0 +1,13 @@
+@* Fin de chaque résultat : la prochaine étape suggérée dans le parcours. *@
+
+<a class="next-step no-print" href="@Href">
+    <span class="next-step-label">Prochaine étape</span>
+    <span class="next-step-text">@ChildContent</span>
+    <span class="next-step-cta">@Action <MudIcon Icon="@Icons.Material.Filled.ArrowForward" Size="Size.Small" /></span>
+</a>
+
+@code {
+    [Parameter, EditorRequired] public string Href { get; set; } = "";
+    [Parameter, EditorRequired] public string Action { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

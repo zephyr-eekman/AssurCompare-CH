@@ -1,0 +1,53 @@
+@* Montant qui défile jusqu'à sa nouvelle valeur. Instantané si l'utilisateur a demandé moins d'animations. *@
+@implements IDisposable
+@inject UiState Ui
+
+<span class="num-anim">@Format(_shown)</span>
+
+@code {
+    [Parameter, EditorRequired] public decimal Value { get; set; }
+    [Parameter] public Func<decimal, string> Format { get; set; } = v => Chf.Format(v, false);
+
+    private decimal _shown;
+    private decimal _target;
+    private bool _first = true;
+    private CancellationTokenSource? _cts;
+
+    protected override void OnParametersSet()
+    {
+        if (!_first && Value == _target) return;
+        _target = Value;
+
+        if (_first || Ui.ReducedMotion)
+        {
+            _first = false;
+            _shown = Value;
+            return;
+        }
+        _ = AnimateAsync(_shown, Value);
+    }
+
+    private async Task AnimateAsync(decimal from, decimal to)
+    {
+        _cts?.Cancel();
+        _cts = new CancellationTokenSource();
+        var token = _cts.Token;
+
+        // Calé sur le temps écoulé : si le navigateur ralentit les minuteries, l'animation finit quand même à l'heure.
+        const double duration = 450;
+        var start = DateTime.UtcNow;
+        while (true)
+        {
+            try { await Task.Delay(16, token); }
+            catch (TaskCanceledException) { return; }
+
+            var t = Math.Min(1, (DateTime.UtcNow - start).TotalMilliseconds / duration);
+            var eased = 1 - Math.Pow(1 - t, 3);
+            _shown = t >= 1 ? to : from + (to - from) * (decimal)eased;
+            StateHasChanged();
+            if (t >= 1) return;
+        }
+    }
+
+    public void Dispose() => _cts?.Cancel();
+}

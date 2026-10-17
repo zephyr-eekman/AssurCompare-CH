@@ -1,5 +1,5 @@
 @page "/methode"
-@using AssurCompare.Core.Prevoyance
+@using AssurCompare.Core.Parametres
 @inject PremiumDataService Data
 
 <PageTitle>Méthode et sources · AssurCompare CH</PageTitle>
@@ -49,13 +49,24 @@
 
     <MudItem xs="12" md="6">
         <MudPaper Class="panel" Outlined>
-            <h2 class="section-title">3e pilier et offres</h2>
+            <h2 class="section-title">Prévoyance, 3e pilier et offres</h2>
             <ul>
-                <li>3e pilier : versement en fin d'année, rendement constant, économie d'impôt = versement × taux marginal.
-                    Maximum @Pillar3aCalculator.ReferenceYear : @Chf.Format(Pillar3aCalculator.MaxWithPensionFund, false) avec 2e pilier,
-                    @Chf.Format(Pillar3aCalculator.MaxWithoutPensionFund, false) sans. L'impôt au moment du retrait n'est pas modélisé.</li>
-                <li>Offres : coût attendu = primes + (franchise + part au-delà de la somme d'assurance) × nombre moyen de sinistres.</li>
+                <li><strong>AVS</strong> : rente d'une carrière complète selon l'échelle légale (art. 34 LAVS), entre
+                    @Chf.Format(SwissParameters.Current.AvsMinMonthlyPension, false) et @Chf.Format(SwissParameters.Current.AvsMaxMonthlyPension, false) par mois en @SwissParameters.Current.Year,
+                    plus la 13e rente (1/12 de la rente annuelle, versée dès décembre 2026).</li>
+                <li><strong>LPP</strong> : salaire coordonné = salaire − @Chf.Format(SwissParameters.Current.LppCoordinationDeduction, false)
+                    (seuil d'entrée @Chf.Format(SwissParameters.Current.LppEntryThreshold, false), maximum @Chf.Format(SwissParameters.Current.LppMaxCoordinatedSalary, false)),
+                    bonifications 7 / 10 / 15 / 18 % selon l'âge, intérêt @SwissParameters.Current.LppMinInterestPct %, conversion @SwissParameters.Current.LppConversionRatePct %.</li>
+                <li><strong>Lacune</strong> = objectif (en % du salaire) − AVS − LPP. Le 3a nécessaire est le versement annuel qui réunit le capital pour la combler.</li>
+                <li><strong>3e pilier</strong> : versement en fin d'année, rendement constant, économie d'impôt = versement × taux marginal.
+                    @foreach (var p in SwissParameters.All)
+                    {
+                        <span>Maximum @p.Year : @Chf.Format(p.Pillar3aWithPensionFund, false) avec 2e pilier, @Chf.Format(p.Pillar3aWithoutPensionFund, false) sans. </span>
+                    }
+                </li>
+                <li><strong>Offres</strong> : coût attendu = primes + (franchise + part au-delà de la somme d'assurance) × nombre moyen de sinistres.</li>
             </ul>
+            <p class="muted">Tous les montants annuels sont réunis dans un seul fichier (<code>SwissParameters.cs</code>). Paramètres 2027 : @SwissParameters.Current.Source.</p>
         </MudPaper>
     </MudItem>
 
@@ -67,6 +78,7 @@
                 <li>Interface MudBlazor, graphiques SVG faits maison.</li>
                 <li>Calculs isolés dans une bibliothèque séparée (<code>AssurCompare.Core</code>) et couverts par des tests automatiques (xUnit).</li>
                 <li>Publication automatique sur GitHub Pages après le passage des tests (GitHub Actions).</li>
+                <li>Confidentialité : le profil et les analyses du mode conseiller sont gardés dans le navigateur (localStorage). Aucun serveur, aucun envoi.</li>
             </ul>
             <p class="muted">
                 Projet personnel de Zéphyr Eekman, réalisé avec l'aide de l'IA, pour illustrer sa motivation pour le conseil en assurance.

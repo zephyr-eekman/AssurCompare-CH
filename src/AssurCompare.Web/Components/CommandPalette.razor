@@ -1,0 +1,116 @@
+@* Ctrl+K : chercher un outil ou un client enregistré, puis Entrée pour l'ouvrir. *@
+@inject NavigationManager Nav
+@inject AnalysisStore Store
+@inject IJSRuntime JS
+
+@if (Visible)
+{
+    <div class="palette-backdrop" @onclick="Close"></div>
+    <div class="palette" role="dialog" aria-modal="true" aria-label="Rechercher un outil ou un client">
+        <div class="palette-input">
+            <MudIcon Icon="@Icons.Material.Filled.Search" />
+            <input id="palette-input" placeholder="Rechercher un outil ou un client…" autocomplete="off"
+                   value="@_query" @oninput="OnInput" @onkeydown="OnKey" aria-controls="palette-list" />
+            <kbd>Échap</kbd>
+        </div>
+        <ul id="palette-list" class="palette-list" role="listbox">
+            @if (Results.Count == 0)
+            {
+                <li class="palette-empty">Aucun résultat pour « @_query ».</li>
+            }
+            @for (var i = 0; i < Results.Count; i++)
+            {
+                var item = Results[i];
+                var index = i;
+                <li role="option" aria-selected="@(index == _selected ? "true" : "false")"
+                    class="palette-item @(index == _selected ? "selected" : "")"
+                    @onclick="() => Go(item)" @onmouseenter="() => _selected = index">
+                    <MudIcon Icon="@item.Icon" Size="Size.Small" />
+                    <span>@item.Title</span>
+                    <small>@item.Group</small>
+                </li>
+            }
+        </ul>
+    </div>
+}
+
+@code {
+    [Parameter] public bool Visible { get; set; }
+    [Parameter] public EventCallback<bool> VisibleChanged { get; set; }
+
+    private sealed record Item(string Title, string Href, string Icon, string Group);
+
+    private string _query = "";
+    private int _selected;
+    private bool _focusPending;
+
+    public static readonly (string Title, string Href, string Icon, string Group)[] Tools =
+    [
+        ("Accueil", "", Icons.Material.Outlined.Home, "Démarrer"),
+        ("Parcours guidé", "parcours", Icons.Material.Outlined.Route, "Démarrer"),
+        ("Comparateur de primes LAMal", "comparateur", Icons.Material.Outlined.CompareArrows, "Santé"),
+        ("Simulateur de franchise", "franchise", Icons.Material.Outlined.ShowChart, "Santé"),
+        ("Lacune de prévoyance", "prevoyance", Icons.Material.Outlined.Elderly, "Prévoyance"),
+        ("Calculateur 3e pilier", "pilier-3a", Icons.Material.Outlined.Savings, "Prévoyance"),
+        ("Analyse des besoins", "besoins", Icons.Material.Outlined.FactCheck, "Biens et responsabilité"),
+        ("Comparateur d'offres", "offres", Icons.Material.Outlined.RequestQuote, "Biens et responsabilité"),
+        ("Tableau de bord conseiller", "conseiller", Icons.Material.Outlined.SpaceDashboard, "Mes dossiers"),
+        ("Mes analyses", "analyses", Icons.Material.Outlined.FolderShared, "Mes dossiers"),
+        ("Fiche client (PDF)", "fiche", Icons.Material.Outlined.PictureAsPdf, "Mes dossiers"),
+        ("Méthode et sources", "methode", Icons.Material.Outlined.Info, "Aide"),
+    ];
+
+    private List<Item> Results
+    {
+        get
+        {
+            var items = Tools.Select(t => new Item(t.Title, t.Href, t.Icon, t.Group))
+                .Concat(Store.Items.Select(a => new Item(a.ClientName, $"fiche/{a.Id}", Icons.Material.Outlined.Person,
+                    $"Client · {a.CreatedAt:dd.MM.yyyy}")));
+            var q = _query.Trim();
+            return (q.Length == 0 ? items : items.Where(i => i.Title.Contains(q, StringComparison.CurrentCultureIgnoreCase)
+                                                            || i.Group.Contains(q, StringComparison.CurrentCultureIgnoreCase)))
+                .Take(9).ToList();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Visible && !_focusPending) _focusPending = true;
+        if (!Visible) { _query = ""; _selected = 0; _focusPending = false; }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (Visible && _focusPending)
+        {
+            _focusPending = false;
+            await JS.InvokeVoidAsync("assurApp.focus", "palette-input");
+        }
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _query = e.Value?.ToString() ?? "";
+        _selected = 0;
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        var count = Results.Count;
+        switch (e.Key)
+        {
+            case "ArrowDown" when count > 0: _selected = (_selected + 1) % count; break;
+            case "ArrowUp" when count > 0: _selected = (_selected - 1 + count) % count; break;
+            case "Enter" when count > 0: await Go(Results[Math.Min(_selected, count - 1)]); break;
+        }
+    }
+
+    private async Task Go(Item item)
+    {
+        await Close();
+        Nav.NavigateTo(item.Href);
+    }
+
+    private Task Close() => VisibleChanged.InvokeAsync(false);
+}

@@ -1,60 +1,162 @@
 @page "/"
 @inject PremiumDataService Data
+@inject AppModeState Mode
+@inject NavigationManager Nav
 
-<PageTitle>AssurCompare CH · Outils d'aide au conseil en assurance</PageTitle>
+<PageTitle>AssurCompare CH · Comparer sa prime et préparer son conseil</PageTitle>
 
-<section class="hero">
-    <h1>Des chiffres clairs pour conseiller le client</h1>
-    <p>
-        AssurCompare CH réunit les calculs qu'un conseiller en assurance fait au quotidien :
-        comparer les primes, choisir la bonne franchise, chiffrer un 3e pilier et repérer les lacunes de couverture.
-    </p>
-    @if (_index is not null)
-    {
-        <div class="hero-figures">
-            <div><strong>@_index.Year</strong>primes officielles</div>
-            <div><strong>@_index.Insurers.Count</strong>caisses-maladie</div>
-            <div><strong>@_index.Cantons.Count</strong>cantons</div>
-            <div><strong>5</strong>outils de calcul</div>
+@* 1. Accroche *@
+<section class="home-hero">
+    <div class="home-hero-text">
+        <div class="eyebrow">Assurance maladie 2027</div>
+        @if (_spread is null)
+        {
+            <MudSkeleton SkeletonType="SkeletonType.Text" Height="56px" Width="90%" />
+            <MudSkeleton SkeletonType="SkeletonType.Text" Height="56px" Width="70%" />
+        }
+        else
+        {
+            <h1>
+                À Neuchâtel, pour la même assurance de base, l'écart entre la caisse la moins chère et la plus chère atteint
+                <span class="accent-figure"><AnimatedNumber Value="_spread.Value" /></span> par an.
+            </h1>
+        }
+        <p class="lead">
+            Les prestations de base sont identiques partout : seule la prime change. AssurCompare CH compare les primes officielles 2027,
+            calcule le vrai coût selon votre franchise et vous donne un plan d'action clair.
+        </p>
+        <div class="cta-row">
+            <MudButton Href="parcours" Variant="Variant.Filled" Color="Color.Secondary" Size="Size.Large"
+                       EndIcon="@Icons.Material.Filled.ArrowForward" Class="cta-main">Comparer ma prime</MudButton>
+            <MudButton OnClick="StartAsAdvisor" Variant="Variant.Text" Color="Color.Primary" Size="Size.Large"
+                       StartIcon="@Icons.Material.Outlined.BusinessCenter">Je suis conseiller</MudButton>
         </div>
-    }
+        <div class="hero-note">Moins d'une minute · aucune inscription · rien n'est envoyé sur un serveur</div>
+    </div>
 </section>
 
-<MudGrid Spacing="3">
-    @foreach (var tool in Tools)
-    {
-        <MudItem xs="12" sm="6" md="4">
-            <MudPaper Outlined Class="tool-card" Style="cursor:pointer" @onclick="() => Nav.NavigateTo(tool.Href)">
-                <MudIcon Icon="@tool.Icon" Color="Color.Primary" Size="Size.Large" />
-                <h2>@tool.Title</h2>
-                <p>@tool.Description</p>
-            </MudPaper>
-        </MudItem>
-    }
-</MudGrid>
+@* 2. Pourquoi c'est difficile *@
+<section class="home-section">
+    <h2 class="home-h2">Pourquoi comparer est difficile</h2>
+    <div class="why-grid">
+        <div class="why">
+            <MudIcon Icon="@Icons.Material.Outlined.GridView" Class="why-icon" />
+            <div>
+                <strong>@(_index is null ? "Des milliers de" : Chf.Number(_index.PremiumCount, false)) primes différentes</strong>
+                <p>@(_index?.Insurers.Count ?? 32) caisses × @(_index?.Cantons.Count ?? 26) cantons × 6 franchises × 4 modèles × 3 classes d'âge, avec ou sans accident.</p>
+            </div>
+        </div>
+        <div class="why">
+            <MudIcon Icon="@Icons.Material.Outlined.Balance" Class="why-icon" />
+            <div>
+                <strong>La prime la plus basse n'est pas le coût le plus bas</strong>
+                <p>Il faut ajouter la <InfoTip Term="franchise" /> et la <InfoTip Term="quote-part" /> : c'est le <InfoTip Term="coût total" /> qui compte.</p>
+            </div>
+        </div>
+        <div class="why">
+            <MudIcon Icon="@Icons.Material.Outlined.EventBusy" Class="why-icon" />
+            <div>
+                <strong>Un délai à ne pas manquer</strong>
+                <p>Pour changer de caisse au 1<sup>er</sup> janvier, la résiliation doit arriver avant le 30 novembre.</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+@* 3. Comment ça marche *@
+<section class="home-section">
+    <h2 class="home-h2">Comment ça marche</h2>
+    <ol class="steps-row">
+        <li><span class="step-num">1</span><strong>Votre profil</strong><p>Canton, âge, frais médicaux, caisse actuelle. Saisi une seule fois.</p></li>
+        <li><span class="step-num">2</span><strong>La comparaison</strong><p>Toutes les offres classées selon votre coût total réel.</p></li>
+        <li><span class="step-num">3</span><strong>Votre plan d'action</strong><p>Économie, franchise conseillée, lacunes et prévoyance, en une page.</p></li>
+    </ol>
+    <MudButton Href="parcours" Variant="Variant.Filled" Color="Color.Primary" EndIcon="@Icons.Material.Filled.ArrowForward">Démarrer le parcours</MudButton>
+</section>
+
+@* 4. Les outils comme un parcours *@
+<section class="home-section">
+    <h2 class="home-h2">Un outil pour chaque étape du conseil</h2>
+    <div class="journeys">
+        @foreach (var j in Journeys)
+        {
+            <div class="journey">
+                <div class="journey-title"><MudIcon Icon="@j.Icon" /> @j.Title</div>
+                <ol>
+                    @foreach (var t in j.Tools)
+                    {
+                        <li>
+                            <a href="@t.Href">
+                                <strong>@t.Title</strong>
+                                <span>@t.Text</span>
+                            </a>
+                        </li>
+                    }
+                </ol>
+            </div>
+        }
+    </div>
+</section>
+
+@* 5. Confiance *@
+<section class="home-section trust">
+    <div class="trust-item">
+        <MudIcon Icon="@Icons.Material.Outlined.Verified" />
+        <div><strong>Sources officielles</strong><span>Primes @(_index?.Year ?? 2027) de l'OFSP (opendata.swiss) et liste officielle des assureurs admis.</span></div>
+    </div>
+    <div class="trust-item">
+        <MudIcon Icon="@Icons.Material.Outlined.Calculate" />
+        <div><strong>Méthode transparente</strong><span>Chaque formule est expliquée et vérifiée par des tests automatiques. <a href="methode">Voir la méthode</a></span></div>
+    </div>
+    <div class="trust-item">
+        <MudIcon Icon="@Icons.Material.Outlined.Lock" />
+        <div><strong>Données privées</strong><span>Tout reste dans votre navigateur. Aucun compte, aucun envoi.</span></div>
+    </div>
+    <div class="trust-item">
+        <MudIcon Icon="@Icons.Material.Outlined.Person" />
+        <div><strong>Projet de Zéphyr Eekman</strong><span>Réalisé avec l'aide de l'IA, pour illustrer le métier de conseiller en assurance.</span></div>
+    </div>
+</section>
 
 @code {
-    [Inject] private NavigationManager Nav { get; set; } = default!;
-
     private PremiumIndex? _index;
+    private decimal? _spread;
 
-    private sealed record Tool(string Href, string Icon, string Title, string Description);
+    private sealed record ToolLink(string Title, string Href, string Text);
+    private sealed record Journey(string Title, string Icon, ToolLink[] Tools);
 
-    private static readonly Tool[] Tools =
+    private static readonly Journey[] Journeys =
     [
-        new("comparateur", Icons.Material.Outlined.CompareArrows, "Comparateur de primes LAMal",
-            "Toutes les caisses d'un canton classées pour un profil donné, avec l'économie annuelle par rapport à la caisse actuelle."),
-        new("franchise", Icons.Material.Outlined.ShowChart, "Simulateur de franchise",
-            "Coût réel de chaque franchise et seuil de rentabilité : à partir de combien de frais la franchise basse vaut-elle la peine ?"),
-        new("besoins", Icons.Material.Outlined.FactCheck, "Analyse des besoins",
-            "Profil du client, couvertures obligatoires, lacunes prioritaires et pistes d'économie. Fiche imprimable en PDF."),
-        new("offres", Icons.Material.Outlined.RequestQuote, "Comparateur d'offres",
-            "Auto, ménage, RC : compare le coût total sur plusieurs années, pas seulement la prime."),
-        new("pilier-3a", Icons.Material.Outlined.Savings, "Calculateur 3e pilier",
-            "Capital à la retraite, impôts économisés et comparaison avec un compte épargne."),
-        new("methode", Icons.Material.Outlined.Info, "Méthode et sources",
-            "D'où viennent les données, quelles formules sont utilisées et quelles sont les limites."),
+        new("Santé", Icons.Material.Outlined.HealthAndSafety, [
+            new("Comparer les primes", "comparateur", "Les 32 caisses classées pour votre profil."),
+            new("Choisir la franchise", "franchise", "Le seuil à partir duquel une franchise basse vaut la peine."),
+        ]),
+        new("Prévoyance", Icons.Material.Outlined.Elderly, [
+            new("Mesurer la lacune", "prevoyance", "AVS + LPP face au revenu souhaité à la retraite."),
+            new("Combler avec le 3a", "pilier-3a", "Capital, rendement et impôts économisés."),
+        ]),
+        new("Biens et responsabilité", Icons.Material.Outlined.Home, [
+            new("Analyser les besoins", "besoins", "Obligatoire, prioritaire, optionnel : la liste du client."),
+            new("Comparer des offres", "offres", "Auto, ménage, RC : le coût total, pas seulement la prime."),
+        ]),
     ];
 
-    protected override async Task OnInitializedAsync() => _index = await Data.GetIndexAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        _index = await Data.GetIndexAsync();
+        var offers = await Data.GetOffersAsync("NE");
+        var cheapestPerInsurer = offers
+            .Where(o => o.Region == 0 && o.Age == AgeGroup.Adulte && o.WithAccident && o.Franchise == 300)
+            .GroupBy(o => o.Insurer.Id)
+            .Select(g => g.Min(o => o.MonthlyPremium))
+            .ToList();
+        if (cheapestPerInsurer.Count > 0)
+            _spread = Math.Floor((cheapestPerInsurer.Max() - cheapestPerInsurer.Min()) * 12);
+    }
+
+    private async Task StartAsAdvisor()
+    {
+        await Mode.SetModeAsync(AppMode.Conseiller);
+        Nav.NavigateTo("conseiller");
+    }
 }

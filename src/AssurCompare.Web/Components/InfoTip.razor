@@ -1,0 +1,16 @@
+@* Terme du lexique avec une petite icône : la définition s'affiche au survol ou au focus clavier. *@
+
+<MudTooltip Text="@Definition" Arrow Placement="Placement.Top" ShowOnFocus RootClass="infotip">
+    <span class="infotip-term" tabindex="0" aria-label="@($"{Label} : {Definition}")">
+        @Label<MudIcon Icon="@Icons.Material.Outlined.Info" Class="infotip-icon" />
+    </span>
+</MudTooltip>
+
+@code {
+    [Parameter, EditorRequired] public string Term { get; set; } = "";
+    /// <summary>Texte affiché ; par défaut, le terme lui-même.</summary>
+    [Parameter] public string? Text { get; set; }
+
+    private string Label => Text ?? Term;
+    private string Definition => Glossary.Terms.GetValueOrDefault(Term.ToLowerInvariant(), "");
+}

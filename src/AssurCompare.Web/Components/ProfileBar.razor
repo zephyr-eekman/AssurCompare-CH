@@ -1,0 +1,60 @@
+@* Rappel du profil partagé en haut des outils, modifiable sans quitter la page. *@
+@using AssurCompare.Core.Besoins
+@implements IDisposable
+@inject ClientProfileState State
+@inject PremiumDataService Data
+
+<MudPaper Outlined Class="profile-bar no-print">
+    <div class="profile-bar-row">
+        <MudIcon Icon="@Icons.Material.Outlined.Person" Class="profile-bar-icon" />
+        <div class="profile-chips" aria-label="Profil utilisé">
+            @if (!string.IsNullOrWhiteSpace(P.Name))
+            {
+                <span class="chip strong">@P.Name</span>
+            }
+            <span class="chip">@CantonName@(Regions > 1 ? $" · région {P.Region}" : "")</span>
+            <span class="chip">@P.Age ans</span>
+            @if (Sections.HasFlag(ProfileSections.Lamal))
+            {
+                <span class="chip">@(P.HasAccidentInLamal ? "avec accident" : "sans accident")</span>
+                <span class="chip">@Chf.Format(P.ExpectedHealthCosts, false) de frais / an</span>
+            }
+            @if (Sections.HasFlag(ProfileSections.Situation))
+            {
+                <span class="chip">@P.Work.Label()</span>
+                <span class="chip">@Chf.Format(P.AnnualSalary, false) / an</span>
+            }
+        </div>
+        <MudButton Variant="Variant.Text" Color="Color.Primary" Size="Size.Small"
+                   StartIcon="@(_editing ? Icons.Material.Filled.ExpandLess : Icons.Material.Outlined.Edit)"
+                   OnClick="() => _editing = !_editing" aria-expanded="@_editing.ToString().ToLowerInvariant()">
+            @(_editing ? "Fermer" : "Modifier le profil")
+        </MudButton>
+    </div>
+    <MudCollapse Expanded="_editing">
+        <div class="profile-bar-editor">
+            <ProfileEditor Sections="Sections" />
+        </div>
+    </MudCollapse>
+</MudPaper>
+
+@code {
+    [Parameter] public ProfileSections Sections { get; set; } = ProfileSections.Lamal;
+
+    private bool _editing;
+    private PremiumIndex? _index;
+
+    private ClientProfile P => State.Profile;
+    private string CantonName => _index?.Cantons.FirstOrDefault(c => c.Code == P.Canton)?.Name ?? P.Canton;
+    private int Regions => _index?.Cantons.FirstOrDefault(c => c.Code == P.Canton)?.Regions.Length ?? 1;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.Changed += OnChanged;
+        _index = await Data.GetIndexAsync();
+    }
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose() => State.Changed -= OnChanged;
+}

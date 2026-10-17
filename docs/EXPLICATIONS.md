@@ -71,7 +71,9 @@ et pourquoi** : c'est exactement ce que ce document t'apprend.
 | **MudBlazor** | Une bibliothèque de composants tout faits (menus, listes déroulantes, tableaux) pour avoir une belle interface. |
 | **Données ouvertes (open data)** | L'OFSP publie gratuitement toutes les primes. J'utilise ce fichier officiel, rien n'est inventé. |
 | **Préparation des données** | Le fichier de l'OFSP fait 24 Mo et 220'000 lignes. Un petit programme le découpe en un fichier par canton, beaucoup plus léger. |
-| **Tests automatiques** | 36 petits programmes qui vérifient que chaque calcul donne le bon résultat. Si on modifie quelque chose et qu'on casse un calcul, un test le signale tout de suite. |
+| **État partagé** | Le profil du client est gardé à un seul endroit, et tous les outils le lisent. C'est pour ça qu'on ne le ressaisit jamais. |
+| **Stockage local** | Le navigateur garde le profil et les analyses sur l'ordinateur (localStorage). Rien ne part sur internet. |
+| **Tests automatiques** | 73 petits programmes qui vérifient que chaque calcul donne le bon résultat. Si on modifie quelque chose et qu'on casse un calcul, un test le signale tout de suite. |
 | **Séparation calcul / affichage** | Les formules sont dans une partie à part (`AssurCompare.Core`) et l'interface dans une autre. On peut ainsi vérifier les calculs sans l'interface. |
 | **GitHub / GitHub Pages** | GitHub garde le code en ligne ; GitHub Pages publie le site gratuitement. À chaque modification, les tests sont relancés et le site est mis à jour automatiquement. |
 
@@ -105,8 +107,64 @@ et pourquoi** : c'est exactement ce que ce document t'apprend.
 
 ---
 
-## 5. Démonstration en 2 minutes (si on te demande de montrer)
+## 5. Ce qui a changé avec la refonte (octobre 2026)
 
-1. **Comparateur** : choisir Neuchâtel, adulte, franchise 300. Montrer l'écart de plus de CHF 2'500 par an. Choisir une « caisse actuelle » chère et montrer l'économie.
-2. **Franchise** : bouger le curseur des frais médicaux de 0 à 5'000 et montrer que la meilleure franchise change. Montrer le seuil de rentabilité.
-3. **Analyse des besoins** : cocher « voiture en leasing » et montrer que la casco devient obligatoire, puis cliquer « Imprimer / PDF ».
+**L'idée** : un vrai parcours, comme un rendez-vous avec un client, au lieu de 5 outils séparés.
+
+- **Le profil est saisi une seule fois.** Canton, âge, frais médicaux, caisse actuelle, salaire : tous les outils les réutilisent.
+  En haut de chaque outil, une barre rappelle le profil avec un bouton « Modifier ».
+- **Parcours guidé en 4 étapes** : Profil → Résultats → Recommandations → Récapitulatif.
+- **Chaque résultat a son « chiffre héros »** (le résultat principal en très grand) et une **prochaine étape** proposée.
+- **Deux modes** dans l'en-tête : *Particulier* et *Conseiller*.
+
+### Le nouvel outil « Lacune de prévoyance » (à savoir expliquer)
+
+- **AVS (1er pilier)** : en 2027, la rente va de **1'280 à 2'560 francs par mois** selon le revenu, pour une carrière complète.
+  Depuis décembre 2026, il y a une **13e rente** chaque année : en moyenne, c'est la rente × 13/12.
+- **LPP (2e pilier)** :
+  - on n'est assuré qu'au-dessus de **23'040 francs** de salaire par an (seuil d'entrée) ;
+  - le **salaire coordonné** est le salaire moins **26'880 francs** (déduction de coordination), au maximum 65'280 ;
+  - chaque année, on épargne un pourcentage de ce salaire coordonné : **7 %** de 25 à 34 ans, **10 %** de 35 à 44, **15 %** de 45 à 54, **18 %** dès 55 ans ;
+  - à 65 ans, le capital est transformé en rente : **6,8 %** du capital par an (taux de conversion).
+- **Lacune** = revenu souhaité (souvent 60 à 80 % du salaire) − AVS − LPP.
+- **3a pour combler** : l'outil calcule combien verser chaque année. Maximum 2027 : **7'373 francs** avec caisse de pension ;
+  sans caisse de pension, **20 % du revenu**, au plus **36'864 francs**. Si ça ne suffit pas, l'outil le dit : il faut alors un rachat LPP ou une épargne libre (3b).
+
+**Exemple à savoir raconter** : un salarié de 30 ans qui gagne 72'000 francs touchera environ 2'480 francs d'AVS (avec la 13e rente)
+et 1'430 francs de LPP par mois. S'il veut 70 % de son salaire (4'200 francs), il lui manque environ 290 francs par mois.
+Un 3a d'environ 1'400 francs par an suffit à combler cet écart, et lui fait en plus économiser des impôts.
+
+### Le mode conseiller
+
+- **Tableau de bord** : nombre d'analyses et économie totale trouvée pour les clients.
+- **Sauvegarder l'analyse** : garde le profil et les résultats clés, **dans le navigateur uniquement** (rien n'est envoyé).
+- **Mes analyses** : retrouver, dupliquer ou supprimer un client.
+- **Fiche client** : une page A4 à imprimer ou enregistrer en PDF.
+- **Mode présentation** : cache les menus et grossit les chiffres pour tourner l'écran vers le client. **Échap** pour quitter.
+- **Ctrl+K** : chercher un outil ou un client au clavier.
+- **Clients fictifs** : un bouton du tableau de bord ajoute 3 exemples inventés pour une démo. Dis bien qu'ils sont fictifs.
+
+**Question probable : « Où sont stockées les données des clients ? »**
+> Uniquement dans le navigateur de l'ordinateur, avec le stockage local. Il n'y a ni serveur ni compte. Pour un vrai cabinet,
+> il faudrait bien sûr un système sécurisé conforme à la protection des données ; ici, c'est une démonstration.
+
+**Question probable : « Pourquoi deux modes ? »**
+> Parce qu'il y a deux publics. Le particulier veut une réponse rapide : combien il peut économiser. Le conseiller veut préparer
+> son rendez-vous, garder une trace et remettre un document au client.
+
+---
+
+## 6. Démonstration en 2 minutes (avec le nouveau parcours)
+
+1. **Accueil (15 secondes)** : montrer la phrase d'accroche. À Neuchâtel, l'écart atteint **CHF 2'539 par an** pour la même assurance de base.
+   Ce chiffre est calculé en direct à partir des données officielles.
+2. **« Comparer ma prime » (45 secondes)** : remplir le profil (Neuchâtel, 30 ans, caisse actuelle CSS franchise 300), puis « Voir mes résultats ».
+   Montrer l'économie en grand, la comparaison aujourd'hui / conseillé et les 5 meilleures offres.
+3. **Recommandations et récapitulatif (30 secondes)** : franchise conseillée, besoins couverts, lacune de retraite, plan d'action.
+   Passer à l'étape 4.
+4. **Mode conseiller (30 secondes)** : basculer sur « Conseiller », cliquer « Sauvegarder l'analyse », ouvrir la **fiche client**
+   et montrer l'aperçu avant impression. Terminer avec le **mode présentation**.
+
+Phrase de conclusion possible :
+> « Ce que je veux montrer, c'est ma façon de travailler avec un client : partir de sa situation, rendre les chiffres clairs
+> et repartir avec des actions concrètes. »

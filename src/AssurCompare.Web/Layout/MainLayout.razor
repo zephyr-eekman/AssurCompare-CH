@@ -1,91 +1,247 @@
 @inherits LayoutComponentBase
+@implements IDisposable
+@inject AppModeState Mode
+@inject AnalysisStore Store
+@inject UiState Ui
+@inject IJSRuntime JS
+@inject NavigationManager Nav
 
 <MudThemeProvider @ref="_themeProvider" Theme="_theme" @bind-IsDarkMode="_isDark" ObserveSystemDarkModeChange="true" />
 <MudPopoverProvider />
 <MudDialogProvider />
 <MudSnackbarProvider />
 
-<div class="app-root @(_isDark ? "dark" : "")">
+<div class="app-root @(_isDark ? "dark" : "") @(Mode.Presenting ? "presenting" : "") @(Ui.ReducedMotion ? "reduce-motion" : "")">
+    <a class="skip-link" href="#contenu">Aller au contenu</a>
     <MudLayout>
-        <MudAppBar Elevation="0" Class="no-print app-bar">
+        <MudAppBar Elevation="0" Class="no-print app-bar" Dense="false">
             <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
-                           OnClick="() => _drawerOpen = !_drawerOpen" aria-label="Menu" />
-            <MudText Typo="Typo.h6" Class="ml-2 app-title">AssurCompare <span class="ch">CH</span></MudText>
+                           OnClick="ToggleDrawer" aria-label="Afficher ou réduire le menu" />
+            <a href="" class="brand" aria-label="AssurCompare CH, accueil">
+                <span class="brand-mark" aria-hidden="true">+</span>
+                <span class="brand-name">AssurCompare <span class="ch">CH</span></span>
+            </a>
+            <span class="trust-badge" title="Primes officielles publiées par l'Office fédéral de la santé publique">
+                <MudIcon Icon="@Icons.Material.Outlined.Verified" Size="Size.Small" /> Primes 2027 · OFSP
+            </span>
             <MudSpacer />
-            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" Class="data-chip">
-                Primes LAMal 2027 · OFSP
-            </MudChip>
-            <MudIconButton Icon="@(_isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
-                           Color="Color.Inherit" OnClick="() => _isDark = !_isDark"
-                           aria-label="Changer de thème" />
+
+            <button class="search-trigger" @onclick="() => _palette = true" aria-label="Rechercher (Ctrl+K)">
+                <MudIcon Icon="@Icons.Material.Filled.Search" Size="Size.Small" />
+                <span class="search-label">Rechercher</span>
+                <kbd>Ctrl K</kbd>
+            </button>
+
+            <div class="mode-switch" role="radiogroup" aria-label="Mode d'utilisation">
+                <button role="radio" aria-checked="@(!Mode.IsAdvisor ? "true" : "false")" class="@(!Mode.IsAdvisor ? "on" : "")"
+                        @onclick="() => Mode.SetModeAsync(AppMode.Particulier)" title="Je suis un particulier">
+                    <MudIcon Icon="@Icons.Material.Outlined.Person" Size="Size.Small" /><span>Particulier</span>
+                </button>
+                <button role="radio" aria-checked="@(Mode.IsAdvisor ? "true" : "false")" class="@(Mode.IsAdvisor ? "on" : "")"
+                        @onclick="() => Mode.SetModeAsync(AppMode.Conseiller)" title="Je suis conseiller">
+                    <MudIcon Icon="@Icons.Material.Outlined.BusinessCenter" Size="Size.Small" /><span>Conseiller</span>
+                </button>
+            </div>
+
+            @if (Mode.IsAdvisor)
+            {
+                <MudTooltip Text="Mes analyses">
+                    <MudBadge Content="@Store.Items.Count" Visible="Store.Items.Count > 0" Color="Color.Secondary" Overlap Bordered>
+                        <MudIconButton Icon="@Icons.Material.Outlined.FolderShared" Color="Color.Inherit" Href="analyses" aria-label="Mes analyses" />
+                    </MudBadge>
+                </MudTooltip>
+                <MudTooltip Text="Mode présentation (Échap pour quitter)">
+                    <MudIconButton Icon="@Icons.Material.Outlined.Slideshow" Color="Color.Inherit"
+                                   OnClick="() => Mode.SetPresenting(true)" aria-label="Mode présentation" />
+                </MudTooltip>
+            }
+            <MudTooltip Text="@(_isDark ? "Thème clair" : "Thème sombre")">
+                <MudIconButton Icon="@(_isDark ? Icons.Material.Outlined.LightMode : Icons.Material.Outlined.DarkMode)"
+                               Color="Color.Inherit" OnClick="() => _isDark = !_isDark" aria-label="Changer de thème" />
+            </MudTooltip>
         </MudAppBar>
 
         <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0"
-                   Variant="DrawerVariant.Responsive" Class="no-print">
-            <MudNavMenu Class="pt-2">
-                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Accueil</MudNavLink>
-                <MudText Typo="Typo.overline" Class="px-4 pt-3 nav-section">Santé (LAMal)</MudText>
-                <MudNavLink Href="comparateur" Icon="@Icons.Material.Outlined.CompareArrows">Comparateur de primes</MudNavLink>
-                <MudNavLink Href="franchise" Icon="@Icons.Material.Outlined.ShowChart">Simulateur de franchise</MudNavLink>
-                <MudText Typo="Typo.overline" Class="px-4 pt-3 nav-section">Conseil</MudText>
-                <MudNavLink Href="besoins" Icon="@Icons.Material.Outlined.FactCheck">Analyse des besoins</MudNavLink>
-                <MudNavLink Href="offres" Icon="@Icons.Material.Outlined.RequestQuote">Comparateur d'offres</MudNavLink>
-                <MudNavLink Href="pilier-3a" Icon="@Icons.Material.Outlined.Savings">Calculateur 3e pilier</MudNavLink>
-                <MudDivider Class="my-3" />
-                <MudNavLink Href="methode" Icon="@Icons.Material.Outlined.Info">Méthode et sources</MudNavLink>
+                   Variant="@(Ui.IsMobile ? DrawerVariant.Temporary : DrawerVariant.Mini)"
+                   Class="@($"no-print app-drawer {(_drawerOpen ? "nav-open" : "nav-mini")}")">
+            <MudNavMenu Class="pt-2" Bordered="false">
+                @foreach (var group in NavGroups)
+                {
+                    if (group.AdvisorOnly && !Mode.IsAdvisor) continue;
+                    <div class="nav-section" aria-hidden="@(!_drawerOpen ? "true" : "false")">@group.Title</div>
+                    @foreach (var link in group.Links)
+                    {
+                        <MudNavLink Href="@link.Href" Match="@(link.Href == "" ? NavLinkMatch.All : NavLinkMatch.Prefix)"
+                                    Icon="@link.Icon" title="@link.Title" OnClick="CloseOnMobile">@link.Title</MudNavLink>
+                    }
+                }
             </MudNavMenu>
         </MudDrawer>
 
         <MudMainContent>
-            <MudContainer MaxWidth="MaxWidth.Large" Class="page">
-                @Body
-            </MudContainer>
+            <main id="contenu">
+                <MudContainer MaxWidth="MaxWidth.Large" Class="page">
+                    @Body
+                </MudContainer>
+            </main>
             <footer class="footer no-print">
-                Projet personnel de Zéphyr Eekman, réalisé avec l'aide de l'IA. Données : Office fédéral de la santé publique (OFSP).
-                Outil indicatif, ne remplace pas une offre officielle.
+                <span>Projet personnel de Zéphyr Eekman, réalisé avec l'aide de l'IA.</span>
+                <span>Données officielles : Office fédéral de la santé publique (OFSP), primes 2027.</span>
+                <span>Outil indicatif : ne remplace pas une offre officielle. <a href="methode">Méthode et sources</a></span>
             </footer>
         </MudMainContent>
     </MudLayout>
+
+    @if (Mode.Presenting)
+    {
+        <button class="exit-presentation" @onclick="() => Mode.SetPresenting(false)">
+            <MudIcon Icon="@Icons.Material.Filled.Close" Size="Size.Small" /> Quitter la présentation <kbd>Échap</kbd>
+        </button>
+    }
+
+    <CommandPalette @bind-Visible="_palette" />
 </div>
 
 @code {
+    private sealed record NavLinkInfo(string Title, string Href, string Icon);
+    private sealed record NavGroup(string Title, bool AdvisorOnly, NavLinkInfo[] Links);
+
+    private static readonly NavGroup[] NavGroups =
+    [
+        new("Démarrer", false, [
+            new("Accueil", "", Icons.Material.Outlined.Home),
+            new("Parcours guidé", "parcours", Icons.Material.Outlined.Route),
+        ]),
+        new("Santé", false, [
+            new("Comparateur de primes", "comparateur", Icons.Material.Outlined.CompareArrows),
+            new("Simulateur de franchise", "franchise", Icons.Material.Outlined.ShowChart),
+        ]),
+        new("Prévoyance", false, [
+            new("Lacune de prévoyance", "prevoyance", Icons.Material.Outlined.Elderly),
+            new("Calculateur 3e pilier", "pilier-3a", Icons.Material.Outlined.Savings),
+        ]),
+        new("Biens et responsabilité", false, [
+            new("Analyse des besoins", "besoins", Icons.Material.Outlined.FactCheck),
+            new("Comparateur d'offres", "offres", Icons.Material.Outlined.RequestQuote),
+        ]),
+        new("Mes dossiers", true, [
+            new("Tableau de bord", "conseiller", Icons.Material.Outlined.SpaceDashboard),
+            new("Mes analyses", "analyses", Icons.Material.Outlined.FolderShared),
+            new("Fiche client", "fiche", Icons.Material.Outlined.PictureAsPdf),
+        ]),
+        new("Aide", false, [
+            new("Méthode et sources", "methode", Icons.Material.Outlined.Info),
+        ]),
+    ];
+
     private MudThemeProvider _themeProvider = default!;
+    private DotNetObjectReference<MainLayout>? _self;
     private bool _isDark;
     private bool _drawerOpen = true;
+    private bool _palette;
+
+    private static readonly string[] TextFont = ["Inter", "system-ui", "-apple-system", "Segoe UI", "Roboto", "sans-serif"];
+    private static readonly string[] DisplayFont = ["Inter Tight", "Inter", "system-ui", "-apple-system", "Segoe UI", "sans-serif"];
 
     private readonly MudTheme _theme = new()
     {
         PaletteLight = new PaletteLight
         {
-            Primary = "#1c5cab",
-            Secondary = "#199e70",
-            AppbarBackground = "#0d366b",
-            Background = "#f6f7f9",
+            Primary = "#123f7a",
+            Secondary = "#d52b1e",
+            Tertiary = "#1c5cab",
+            AppbarBackground = "#0b2a52",
+            Background = "#f4f6f9",
             Surface = "#ffffff",
             DrawerBackground = "#ffffff",
-            TextPrimary = "#0b0b0b",
-            TextSecondary = "#52514e",
+            TextPrimary = "#0f1724",
+            TextSecondary = "#4a5363",
+            LinesDefault = "#e3e7ee",
+            Success = "#0a7a33",
         },
         PaletteDark = new PaletteDark
         {
-            Primary = "#5598e7",
-            Secondary = "#1baf7a",
-            AppbarBackground = "#10233f",
-            Background = "#0f1115",
-            Surface = "#1a1b1e",
-            DrawerBackground = "#15161a",
-            TextPrimary = "#f0efec",
-            TextSecondary = "#c3c2b7",
+            Primary = "#7fb0f0",
+            Secondary = "#ff5a4e",
+            Tertiary = "#5598e7",
+            AppbarBackground = "#0b1a30",
+            Background = "#0d1117",
+            Surface = "#151a22",
+            DrawerBackground = "#11161d",
+            TextPrimary = "#eef1f5",
+            TextSecondary = "#b4bcc8",
+            LinesDefault = "#262d38",
+            Success = "#3ccf73",
         },
-        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "10px" },
+        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "12px" },
+        Typography = new Typography
+        {
+            Default = new DefaultTypography { FontFamily = TextFont },
+            H1 = new H1Typography { FontFamily = DisplayFont },
+            H2 = new H2Typography { FontFamily = DisplayFont },
+            H3 = new H3Typography { FontFamily = DisplayFont },
+            H4 = new H4Typography { FontFamily = DisplayFont },
+            H5 = new H5Typography { FontFamily = DisplayFont },
+            H6 = new H6Typography { FontFamily = DisplayFont },
+            Button = new ButtonTypography { FontFamily = TextFont, TextTransform = "none", FontWeight = "600" },
+        },
     };
+
+    protected override void OnInitialized()
+    {
+        Mode.Changed += OnStateChanged;
+        Store.Changed += OnStateChanged;
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        if (firstRender)
-        {
-            _isDark = await _themeProvider.GetSystemDarkModeAsync();
-            StateHasChanged();
-        }
+        if (!firstRender) return;
+
+        _isDark = await _themeProvider.GetSystemDarkModeAsync();
+        _self = DotNetObjectReference.Create(this);
+        var init = await JS.InvokeAsync<UiInit>("assurApp.init", _self);
+        Ui.IsMobile = init.Mobile;
+        Ui.ReducedMotion = init.ReducedMotion;
+        _drawerOpen = !init.Mobile;
+        StateHasChanged();
+    }
+
+    private void ToggleDrawer() => _drawerOpen = !_drawerOpen;
+
+    private void CloseOnMobile()
+    {
+        if (Ui.IsMobile) _drawerOpen = false;
+    }
+
+    [JSInvokable]
+    public Task OnCommandPalette() => InvokeAsync(() =>
+    {
+        _palette = true;
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task OnEscape() => InvokeAsync(() =>
+    {
+        if (_palette) _palette = false;
+        else if (Mode.Presenting) Mode.SetPresenting(false);
+        StateHasChanged();
+    });
+
+    [JSInvokable]
+    public Task OnViewportChanged(bool mobile) => InvokeAsync(() =>
+    {
+        Ui.IsMobile = mobile;
+        _drawerOpen = !mobile;
+        StateHasChanged();
+    });
+
+    private void OnStateChanged() => InvokeAsync(StateHasChanged);
+
+    public void Dispose()
+    {
+        Mode.Changed -= OnStateChanged;
+        Store.Changed -= OnStateChanged;
+        _self?.Dispose();
     }
 }

@@ -1,120 +1,47 @@
 @page "/besoins"
 @using AssurCompare.Core.Besoins
+@implements IDisposable
+@inject ClientProfileState State
 @inject IJSRuntime JS
 
 <PageTitle>Analyse des besoins · AssurCompare CH</PageTitle>
 
 <div class="page-header no-print">
-    <h1>Analyse des besoins client</h1>
+    <div class="eyebrow">Biens et responsabilité · étape 1</div>
+    <h1>Analyse des besoins</h1>
     <p>
-        L'outil d'un premier entretien conseil : on décrit la situation du client et ce qu'il possède déjà,
-        l'outil liste les couvertures obligatoires, les lacunes prioritaires et les pistes d'économie.
-        La fiche peut être imprimée ou enregistrée en PDF pour le client.
+        L'outil d'un premier entretien conseil : la situation du client et ce qu'il possède déjà donnent
+        les couvertures obligatoires, les lacunes prioritaires et les pistes d'économie.
     </p>
 </div>
 
-<div class="print-only" style="margin-bottom:16px">
-    <h1 style="margin:0">Analyse des besoins en assurance</h1>
-    <div>Client : <strong>@(string.IsNullOrWhiteSpace(_p.Name) ? "—" : _p.Name)</strong> · établie le @DateTime.Today.ToString("dd.MM.yyyy")</div>
+<div class="print-only print-head">
+    <h1>Analyse des besoins en assurance</h1>
+    <div>Client : <strong>@(string.IsNullOrWhiteSpace(P.Name) ? "non renseigné" : P.Name)</strong> · établie le @DateTime.Today.ToString("dd.MM.yyyy")</div>
 </div>
 
 <MudGrid Spacing="3">
     <MudItem xs="12" md="5" Class="no-print">
         <MudPaper Class="panel" Outlined>
-            <h2 class="section-title">Situation du client</h2>
-            <MudStack Spacing="2">
-                <MudTextField T="string" Label="Nom du client" @bind-Value="_p.Name" @bind-Value:after="Recompute" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                <MudGrid Spacing="2">
-                    <MudItem xs="6">
-                        <MudNumericField T="int" Label="Âge" @bind-Value="_p.Age" @bind-Value:after="Recompute" Min="0" Max="110" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    </MudItem>
-                    <MudItem xs="6">
-                        <MudNumericField T="int" Label="Enfants" @bind-Value="_p.Children" @bind-Value:after="Recompute" Min="0" Max="10" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                    </MudItem>
-                    <MudItem xs="6">
-                        <MudSelect T="WorkStatus" Label="Activité" @bind-Value="_p.Work" @bind-Value:after="Recompute" Variant="Variant.Outlined" Dense>
-                            @foreach (var w in Enum.GetValues<WorkStatus>())
-                            {
-                                <MudSelectItem Value="w">@w.Label()</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </MudItem>
-                    <MudItem xs="6">
-                        @if (_p.Work == WorkStatus.Salarie)
-                        {
-                            <MudNumericField T="int" Label="Heures / semaine" @bind-Value="_p.WeeklyHours" @bind-Value:after="Recompute" Min="0" Max="60" Variant="Variant.Outlined" Margin="Margin.Dense" />
-                        }
-                    </MudItem>
-                    <MudItem xs="12">
-                        <MudSelect T="HousingStatus" Label="Logement" @bind-Value="_p.Housing" @bind-Value:after="Recompute" Variant="Variant.Outlined" Dense>
-                            @foreach (var h in Enum.GetValues<HousingStatus>())
-                            {
-                                <MudSelectItem Value="h">@h.Label()</MudSelectItem>
-                            }
-                        </MudSelect>
-                    </MudItem>
-                </MudGrid>
-                @if (_p.Work == WorkStatus.Salarie)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasPensionFund" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Affilié à une caisse de pension (2e pilier)" />
-                }
-                <MudCheckBox T="bool" @bind-Value="_p.LivesWithPartner" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Vit en couple" />
-                <MudCheckBox T="bool" @bind-Value="_p.HasCar" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Possède une voiture" />
-                @if (_p.HasCar)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasLeasing" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Voiture en leasing" Class="ml-6" />
-                }
-                <MudCheckBox T="bool" @bind-Value="_p.HasMotorbike" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Possède une moto" />
-                <MudCheckBox T="bool" @bind-Value="_p.TravelsAbroad" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Voyage régulièrement à l'étranger" />
-
-                <MudDivider Class="my-2" />
-                <h2 class="section-title">Ce que le client a déjà</h2>
-                <MudCheckBox T="bool" @bind-Value="_p.HasAccidentInLamal" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Accident inclus dans la LAMal" />
-                <MudCheckBox T="bool" @bind-Value="_p.HasRcPrivee" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="RC privée" />
-                <MudCheckBox T="bool" @bind-Value="_p.HasMenage" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Assurance ménage" />
-                @if (_p.Housing == HousingStatus.Proprietaire)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasBatiment" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Assurance bâtiment" />
-                }
-                @if (_p.HasCar)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasCasco" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Casco" />
-                }
-                <MudCheckBox T="bool" @bind-Value="_p.Has3a" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Pilier 3a" />
-                <MudCheckBox T="bool" @bind-Value="_p.HasRiskLifeInsurance" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Assurance risque décès / invalidité" />
-                @if (_p.Work == WorkStatus.Independant)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasLossOfEarnings" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Perte de gain maladie" />
-                }
-                @if (_p.Children > 0)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasChildDental" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Complémentaire dentaire enfants" />
-                }
-                <MudCheckBox T="bool" @bind-Value="_p.HasLegalProtection" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Protection juridique" />
-                @if (_p.TravelsAbroad)
-                {
-                    <MudCheckBox T="bool" @bind-Value="_p.HasTravelInsurance" @bind-Value:after="Recompute" Color="Color.Primary" Dense Label="Assurance voyage" />
-                }
-            </MudStack>
+            <ProfileEditor Sections="ProfileSections.Situation | ProfileSections.Couvertures" />
         </MudPaper>
     </MudItem>
 
     <MudItem xs="12" md="7" Class="print-full">
         <MudPaper Class="panel" Outlined>
-            <div class="d-flex align-center flex-wrap gap-4 mb-2">
-                <div>
-                    <div class="stat-label">Couverture des besoins essentiels</div>
-                    <div class="score-ring @ScoreClass">@_report.CoverageScore %</div>
-                </div>
-                <div style="flex:1;min-width:180px">
-                    <MudProgressLinear Value="_report.CoverageScore" Color="@ScoreColor" Size="Size.Large" Rounded />
-                    <div class="stat-sub mt-1">@_report.Gaps.Count(g => g.Priority <= Priority.Haute) point(s) obligatoire(s) ou prioritaire(s) à traiter</div>
-                </div>
-                <MudButton Class="no-print" Variant="Variant.Filled" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
-                           OnClick="Print">Imprimer / PDF</MudButton>
+            <div class="score-head">
+                <HeroNumber Label="Couverture des besoins essentiels" Value="_report.CoverageScore" Format="@(v => $"{v:0} %")"
+                            Tone="@(_report.CoverageScore >= 80 ? "good" : "accent")">
+                    @(_essentialGaps == 0
+                        ? "Les couvertures obligatoires et prioritaires sont en place."
+                        : $"{_essentialGaps} point(s) obligatoire(s) ou prioritaire(s) à traiter.")
+                </HeroNumber>
+                <MudButton Class="no-print" Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Print"
+                           OnClick="Print">Imprimer</MudButton>
             </div>
+            <MudProgressLinear Value="_report.CoverageScore" Color="@(_report.CoverageScore >= 80 ? Color.Success : Color.Secondary)" Rounded Class="mb-4" />
 
-            <h2 class="section-title mt-4">À traiter</h2>
+            <h2 class="section-title">À traiter</h2>
             @if (!_report.Gaps.Any())
             {
                 <MudAlert Severity="Severity.Success">Aucune lacune détectée avec ces informations.</MudAlert>
@@ -145,24 +72,42 @@
                 }
             }
 
-            <MudText Typo="Typo.caption" Class="muted d-block mt-4">
+            <div class="caption">
                 Analyse indicative établie à partir des informations fournies. Elle ne constitue pas un conseil juridique :
                 les conditions exactes dépendent du canton et des contrats.
-            </MudText>
+            </div>
         </MudPaper>
+
+        <div class="result-footer">
+            <SaveAnalysisButton />
+            <NextStep Href="offres" Action="Comparer des offres">
+                Pour chaque couverture à mettre en place, comparez les offres sur leur coût total et pas seulement sur la prime.
+            </NextStep>
+        </div>
     </MudItem>
 </MudGrid>
 
 @code {
-    private readonly ClientProfile _p = new() { Name = "", Age = 28, WeeklyHours = 42 };
     private NeedsReport _report = default!;
+    private int _essentialGaps;
 
-    protected override void OnInitialized() => Recompute();
+    private ClientProfile P => State.Profile;
 
-    private void Recompute() => _report = NeedsAnalyzer.Analyze(_p);
+    protected override void OnInitialized()
+    {
+        State.Changed += OnProfileChanged;
+        Recompute();
+    }
 
-    private string ScoreClass => _report.CoverageScore >= 80 ? "good" : _report.CoverageScore < 50 ? "bad" : "";
-    private Color ScoreColor => _report.CoverageScore >= 80 ? Color.Success : _report.CoverageScore < 50 ? Color.Error : Color.Warning;
+    private void OnProfileChanged() => InvokeAsync(() => { Recompute(); StateHasChanged(); });
+
+    private void Recompute()
+    {
+        _report = NeedsAnalyzer.Analyze(P);
+        _essentialGaps = _report.Gaps.Count(g => g.Priority <= Priority.Haute);
+    }
 
     private async Task Print() => await JS.InvokeVoidAsync("print");
+
+    public void Dispose() => State.Changed -= OnProfileChanged;
 }

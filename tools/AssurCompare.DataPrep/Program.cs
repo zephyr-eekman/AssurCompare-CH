@@ -86,6 +86,7 @@ var index = new PremiumIndex
     Year = year,
     Source = "Office fédéral de la santé publique (OFSP), primes de l'assurance obligatoire des soins, opendata.swiss",
     GeneratedOn = DateOnly.FromDateTime(DateTime.Today),
+    PremiumCount = kept,
     Cantons = perCanton.Values
         .Select(b => new CantonInfo(b.Canton, cantonNames[b.Canton], b.Regions.Order().ToArray()))
         .OrderBy(c => c.Name, StringComparer.Create(CultureInfo.GetCultureInfo("fr-CH"), false))

@@ -1,0 +1,26 @@
+@* Le résultat principal d'un outil, en très grand, avec une phrase d'explication. *@
+
+<section class="hero-number @Tone" aria-live="polite">
+    <div class="hero-number-label">@Label</div>
+    <div class="hero-number-value">
+        <AnimatedNumber Value="Value" Format="Format" />
+        @if (!string.IsNullOrEmpty(Unit))
+        {
+            <span class="hero-number-unit">@Unit</span>
+        }
+    </div>
+    @if (ChildContent is not null)
+    {
+        <div class="hero-number-text">@ChildContent</div>
+    }
+</section>
+
+@code {
+    [Parameter, EditorRequired] public string Label { get; set; } = "";
+    [Parameter, EditorRequired] public decimal Value { get; set; }
+    [Parameter] public Func<decimal, string> Format { get; set; } = v => Chf.Format(v, false);
+    [Parameter] public string? Unit { get; set; }
+    /// <summary>« good » (économie), « accent » (chiffre clé) ou vide.</summary>
+    [Parameter] public string Tone { get; set; } = "";
+    [Parameter] public RenderFragment? ChildContent { get; set; }
+}

@@ -32,6 +32,14 @@ public static class LamalRules
 
     public static int DefaultFranchise(AgeGroup group) => group == AgeGroup.Enfant ? 0 : 300;
 
+    /// <summary>Classe d'âge OFSP selon l'âge en années.</summary>
+    public static AgeGroup AgeGroupFor(int age) => age switch
+    {
+        <= 18 => AgeGroup.Enfant,
+        <= 25 => AgeGroup.JeuneAdulte,
+        _ => AgeGroup.Adulte,
+    };
+
     public static CostSharing ComputeCostSharing(decimal healthCosts, int franchise, AgeGroup group)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(healthCosts);

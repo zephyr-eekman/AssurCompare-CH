@@ -1,0 +1,86 @@
+@* Mode conseiller : enregistre l'analyse du profil courant dans le navigateur. *@
+@using AssurCompare.Core.Analyses
+@implements IDisposable
+@inject AppModeState Mode
+@inject ClientProfileState State
+@inject AnalysisService Analyses
+@inject AnalysisStore Store
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+@if (Mode.IsAdvisor)
+{
+    <div class="save-analysis no-print">
+        @if (!_open)
+        {
+            <MudButton Variant="Variant.Outlined" Color="Color.Primary" StartIcon="@Icons.Material.Outlined.Save" OnClick="Open">
+                Sauvegarder l'analyse
+            </MudButton>
+        }
+        else
+        {
+            <div class="save-analysis-form">
+                <MudTextField T="string" @bind-Value="_name" Label="Nom du client" Variant="Variant.Outlined" Margin="Margin.Dense"
+                              AutoFocus Immediate OnKeyDown="OnKey" />
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" Disabled="string.IsNullOrWhiteSpace(_name) || _saving" OnClick="Save">
+                    Enregistrer
+                </MudButton>
+                <MudButton Variant="Variant.Text" OnClick="() => _open = false">Annuler</MudButton>
+            </div>
+            <div class="muted save-analysis-hint">Enregistré uniquement dans ce navigateur. Aucune donnée n'est envoyée.</div>
+        }
+    </div>
+}
+
+@code {
+    private bool _open;
+    private bool _saving;
+    private string _name = "";
+
+    protected override void OnInitialized() => Mode.Changed += OnChanged;
+
+    private void OnChanged() => InvokeAsync(StateHasChanged);
+
+    private void Open()
+    {
+        _name = State.Profile.Name;
+        _open = true;
+    }
+
+    private async Task OnKey(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_name)) await Save();
+    }
+
+    private async Task Save()
+    {
+        _saving = true;
+        State.Profile.Name = _name.Trim();
+        await State.NotifyChangedAsync();
+
+        var analysis = new SavedAnalysis
+        {
+            ClientName = State.Profile.Name,
+            Profile = State.Profile.Clone(),
+            Summary = await Analyses.BuildCurrentAsync(),
+        };
+        var stored = await Store.SaveAsync(analysis);
+        _saving = false;
+        _open = false;
+
+        if (stored)
+        {
+            Snackbar.Add($"Analyse de {analysis.ClientName} enregistrée.", Severity.Success, o =>
+            {
+                o.Action = "Voir la fiche";
+                o.OnClick = _ => { Nav.NavigateTo($"fiche/{analysis.Id}"); return Task.CompletedTask; };
+            });
+        }
+        else
+        {
+            Snackbar.Add("Le navigateur bloque l'enregistrement (navigation privée ?). L'analyse reste visible tant que la page est ouverte.", Severity.Warning);
+        }
+    }
+
+    public void Dispose() => Mode.Changed -= OnChanged;
+}

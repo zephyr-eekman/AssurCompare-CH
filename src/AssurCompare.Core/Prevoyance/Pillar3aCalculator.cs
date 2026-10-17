@@ -1,3 +1,5 @@
+using AssurCompare.Core.Parametres;
+
 namespace AssurCompare.Core.Prevoyance;
 
 public sealed record Pillar3aInput(
@@ -6,7 +8,8 @@ public sealed record Pillar3aInput(
     decimal ExpectedReturnPct,
     decimal MarginalTaxRatePct,
     decimal SavingsAccountRatePct,
-    bool HasPensionFund = true);
+    bool HasPensionFund = true,
+    int Year = 2026);
 
 public sealed record Pillar3aYear(
     int Year,
@@ -33,15 +36,16 @@ public sealed record Pillar3aResult(IReadOnlyList<Pillar3aYear> Years, bool Exce
 public static class Pillar3aCalculator
 {
     /// <summary>Montant maximal 2026 pour un salarié affilié à une caisse de pension (LPP).</summary>
-    public const decimal MaxWithPensionFund = 7_258m;
+    public static decimal MaxWithPensionFund => SwissParameters.Y2026.Pillar3aWithPensionFund;
 
     /// <summary>Montant maximal 2026 sans 2e pilier (20 % du revenu, plafonné).</summary>
-    public const decimal MaxWithoutPensionFund = 36_288m;
+    public static decimal MaxWithoutPensionFund => SwissParameters.Y2026.Pillar3aWithoutPensionFund;
 
-    public const int ReferenceYear = 2026;
-
-    public static decimal LegalMaximum(bool hasPensionFund) =>
-        hasPensionFund ? MaxWithPensionFund : MaxWithoutPensionFund;
+    public static decimal LegalMaximum(bool hasPensionFund, int year = 2026)
+    {
+        var p = SwissParameters.For(year);
+        return hasPensionFund ? p.Pillar3aWithPensionFund : p.Pillar3aWithoutPensionFund;
+    }
 
     public static Pillar3aResult Simulate(Pillar3aInput input)
     {
@@ -70,6 +74,6 @@ public static class Pillar3aCalculator
                 Math.Round(capitalSavings, 2)));
         }
 
-        return new Pillar3aResult(years, input.AnnualContribution > LegalMaximum(input.HasPensionFund));
+        return new Pillar3aResult(years, input.AnnualContribution > LegalMaximum(input.HasPensionFund, input.Year));
     }
 }
