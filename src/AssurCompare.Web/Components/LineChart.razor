@@ -1,0 +1,159 @@
+@* Graphique en courbes SVG fait maison : axes, légende, réticule et infobulle au survol. *@
+
+<figure class="viz" aria-label="@AriaLabel">
+    @if (Series.Count > 1)
+    {
+        <div class="viz-legend">
+            @foreach (var s in Series)
+            {
+                <span class="viz-legend-item"><span class="viz-swatch" style="background:@s.Color"></span>@s.Name</span>
+            }
+        </div>
+    }
+
+    <div class="viz-plot" @onmouseleave="() => _hover = null">
+        <svg viewBox="0 0 @Width @Height" role="img">
+            @* Grille et graduations de l'axe Y *@
+            @foreach (var tick in _yTicks)
+            {
+                var y = Y(tick);
+                <line class="viz-grid" x1="@Left" x2="@(Width - Right)" y1="@F(y)" y2="@F(y)" />
+            }
+            <line class="viz-axis" x1="@Left" x2="@(Width - Right)" y1="@F(Height - Bottom)" y2="@F(Height - Bottom)" />
+
+            @foreach (var marker in Markers)
+            {
+                var x = X(marker.X);
+                <line class="viz-marker" x1="@F(x)" x2="@F(x)" y1="@Top" y2="@F(Height - Bottom)" />
+            }
+
+            @foreach (var s in Series)
+            {
+                <polyline class="viz-line" style="stroke:@s.Color" points="@Points(s)" />
+            }
+
+            @if (_hover is int h)
+            {
+                var hx = X(_xs[h]);
+                <line class="viz-crosshair" x1="@F(hx)" x2="@F(hx)" y1="@Top" y2="@F(Height - Bottom)" />
+                @foreach (var s in Series)
+                {
+                    <circle class="viz-dot" cx="@F(hx)" cy="@F(Y(s.Points[h].Y))" r="5" style="fill:@s.Color" />
+                }
+            }
+
+            @* Zones de survol, plus larges que les points *@
+            @for (var i = 0; i < _xs.Count; i++)
+            {
+                var index = i;
+                var (from, to) = HitBand(index);
+                <rect x="@F(from)" y="@Top" width="@F(to - from)" height="@F(Height - Top - Bottom)"
+                      fill="transparent" @onmouseenter="() => _hover = index" />
+            }
+        </svg>
+
+        @* Étiquettes en HTML pour qu'elles ne soient pas déformées par le SVG *@
+        @foreach (var tick in _yTicks)
+        {
+            <span class="viz-ytick" style="top:@Pct(Y(tick), Height)">@YFormat(tick)</span>
+        }
+        @foreach (var tick in _xTicks)
+        {
+            <span class="viz-xtick" style="left:@Pct(X(tick), Width);top:@Pct(Height - Bottom + 6, Height)">@XFormat(tick)</span>
+        }
+        @foreach (var marker in Markers)
+        {
+            <span class="viz-marker-label" style="left:@Pct(X(marker.X), Width)">@marker.Label</span>
+        }
+
+        @if (_hover is int hv)
+        {
+            var left = X(_xs[hv]) / Width;
+            <div class="viz-tooltip @(left > 0.6 ? "left" : "")" style="left:@Pct(X(_xs[hv]), Width)">
+                <div class="viz-tooltip-title">@XTitle @XFormat(_xs[hv])</div>
+                @foreach (var s in Series.OrderBy(s => s.Points[hv].Y))
+                {
+                    <div class="viz-tooltip-row">
+                        <span class="viz-swatch" style="background:@s.Color"></span>
+                        <span>@s.Name</span>
+                        <strong>@YFormat(s.Points[hv].Y)</strong>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+    @if (!string.IsNullOrEmpty(Caption))
+    {
+        <figcaption>@Caption</figcaption>
+    }
+</figure>
+
+@code {
+    public sealed record Line(string Name, string Color, IReadOnlyList<(decimal X, decimal Y)> Points);
+    public sealed record Marker(decimal X, string Label);
+
+    /// <summary>Toutes les séries doivent partager les mêmes valeurs X.</summary>
+    [Parameter, EditorRequired] public IReadOnlyList<Line> Series { get; set; } = [];
+    [Parameter] public IReadOnlyList<Marker> Markers { get; set; } = [];
+    [Parameter] public Func<decimal, string> XFormat { get; set; } = v => v.ToString("0");
+    [Parameter] public Func<decimal, string> YFormat { get; set; } = v => v.ToString("0");
+    [Parameter] public string XTitle { get; set; } = "";
+    [Parameter] public string? Caption { get; set; }
+    [Parameter] public string AriaLabel { get; set; } = "Graphique";
+    [Parameter] public bool StartYAtZero { get; set; }
+
+    private const double Width = 800, Height = 340, Left = 8, Right = 8, Top = 12, Bottom = 28;
+
+    private List<decimal> _xs = [];
+    private List<decimal> _yTicks = [];
+    private List<decimal> _xTicks = [];
+    private decimal _xMin, _xMax, _yMin, _yMax;
+    private int? _hover;
+
+    protected override void OnParametersSet()
+    {
+        _xs = Series.Count > 0 ? Series[0].Points.Select(p => p.X).ToList() : [];
+        if (_hover >= _xs.Count) _hover = null;
+        if (_xs.Count == 0) return;
+
+        _xMin = _xs[0];
+        _xMax = _xs[^1] == _xMin ? _xMin + 1 : _xs[^1];
+
+        var ys = Series.SelectMany(s => s.Points.Select(p => p.Y)).ToList();
+        var (low, high) = (StartYAtZero ? 0 : ys.Min(), ys.Max());
+        var step = NiceStep((high - low) / 5);
+        _yMin = Math.Floor(low / step) * step;
+        _yMax = Math.Ceiling(high / step) * step;
+        if (_yMax == _yMin) _yMax = _yMin + step;
+        _yTicks = [];
+        for (var t = _yMin; t <= _yMax; t += step) _yTicks.Add(t);
+
+        var xStep = NiceStep((_xMax - _xMin) / 6);
+        _xTicks = [];
+        for (var t = Math.Ceiling(_xMin / xStep) * xStep; t <= _xMax; t += xStep) _xTicks.Add(t);
+    }
+
+    private static decimal NiceStep(decimal rough)
+    {
+        if (rough <= 0) return 1;
+        var magnitude = (decimal)Math.Pow(10, Math.Floor(Math.Log10((double)rough)));
+        var normalized = rough / magnitude;
+        var nice = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 2.5m ? 2.5m : normalized <= 5 ? 5 : 10;
+        return nice * magnitude;
+    }
+
+    private double X(decimal x) => Left + (double)((x - _xMin) / (_xMax - _xMin)) * (Width - Left - Right);
+    private double Y(decimal y) => Height - Bottom - (double)((y - _yMin) / (_yMax - _yMin)) * (Height - Top - Bottom);
+
+    private (double From, double To) HitBand(int i)
+    {
+        var from = i == 0 ? Left : (X(_xs[i - 1]) + X(_xs[i])) / 2;
+        var to = i == _xs.Count - 1 ? Width - Right : (X(_xs[i]) + X(_xs[i + 1])) / 2;
+        return (from, to);
+    }
+
+    private string Points(Line s) => string.Join(' ', s.Points.Select(p => $"{F(X(p.X))},{F(Y(p.Y))}"));
+
+    private static string F(double v) => v.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture);
+    private static string Pct(double v, double total) => (v / total * 100).ToString("0.##", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/AssurCompare.Core/AssurCompare.Core.csproj" />
+    <Project Path="src/AssurCompare.Web/AssurCompare.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/AssurCompare.Core.Tests/AssurCompare.Core.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/AssurCompare.DataPrep/AssurCompare.DataPrep.csproj" />
+  </Folder>
+</Solution>

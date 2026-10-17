@@ -1,0 +1,10 @@
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+publish/
+TestResults/
+
+# Fichiers bruts de l'OFSP (24 Mo) : retéléchargeables, voir README
+data-source/

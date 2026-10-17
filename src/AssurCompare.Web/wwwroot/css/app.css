@@ -1,0 +1,541 @@
+/* ---------- Jetons de couleur (graphiques et indicateurs) ---------- */
+.app-root {
+    --surface-1: #ffffff;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --axis: #c3c2b7;
+    --border: rgba(11, 11, 11, 0.10);
+    --good: #006300;
+    --bad: #d03b3b;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #6250d6;
+    --bar: #2a78d6;
+    --bar-highlight: #0d366b;
+}
+
+.app-root.dark {
+    --surface-1: #1a1b1e;
+    --text-primary: #f0efec;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --axis: #383835;
+    --border: rgba(255, 255, 255, 0.10);
+    --good: #0ca30c;
+    --bad: #e66767;
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --bar: #3987e5;
+    --bar-highlight: #9ec5f4;
+}
+
+body {
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.page {
+    padding-top: 24px;
+    padding-bottom: 32px;
+}
+
+.app-bar .ch {
+    font-weight: 300;
+    opacity: .8;
+}
+
+.data-chip {
+    border-color: rgba(255, 255, 255, .5) !important;
+    color: #fff !important;
+}
+
+h1:focus {
+    outline: none;
+}
+
+@media (max-width: 600px) {
+    .data-chip { display: none; }
+}
+
+.nav-section {
+    color: var(--text-muted);
+    display: block;
+}
+
+.footer {
+    color: var(--text-muted);
+    font-size: .8rem;
+    text-align: center;
+    padding: 16px 16px 24px;
+}
+
+/* ---------- En-tête de page ---------- */
+.page-header {
+    margin-bottom: 20px;
+}
+
+.page-header h1 {
+    font-size: 1.75rem;
+    font-weight: 650;
+    margin: 0 0 4px;
+    color: var(--text-primary);
+}
+
+.page-header p {
+    color: var(--text-secondary);
+    margin: 0;
+    max-width: 70ch;
+}
+
+/* ---------- Indicateurs (stat tiles) ---------- */
+.stat {
+    padding: 16px;
+    height: 100%;
+}
+
+.stat-label {
+    color: var(--text-secondary);
+    font-size: .8rem;
+    margin-bottom: 4px;
+}
+
+.stat-value {
+    color: var(--text-primary);
+    font-size: 1.5rem;
+    font-weight: 650;
+    line-height: 1.2;
+}
+
+.stat-sub {
+    color: var(--text-muted);
+    font-size: .8rem;
+    margin-top: 2px;
+}
+
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+
+.num {
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.muted { color: var(--text-muted); }
+
+.section-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 0 0 12px;
+    color: var(--text-primary);
+}
+
+.panel {
+    padding: 20px;
+}
+
+/* ---------- Barres horizontales (classement) ---------- */
+.bars {
+    display: grid;
+    gap: 6px;
+}
+
+.bar-row {
+    display: grid;
+    grid-template-columns: minmax(110px, 34%) 1fr auto;
+    align-items: center;
+    gap: 10px;
+    font-size: .875rem;
+}
+
+.bar-name {
+    color: var(--text-primary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.bar-name small {
+    color: var(--text-muted);
+}
+
+.bar-track {
+    height: 14px;
+}
+
+.bar-fill {
+    height: 100%;
+    background: var(--bar);
+    border-radius: 0 4px 4px 0;
+    min-width: 2px;
+}
+
+.bar-row.highlight .bar-fill {
+    background: var(--bar-highlight);
+}
+
+.bar-value {
+    color: var(--text-primary);
+    font-variant-numeric: tabular-nums;
+    min-width: 92px;
+    text-align: right;
+}
+
+/* ---------- Graphique en courbes ---------- */
+.viz {
+    margin: 0;
+}
+
+.viz-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px 16px;
+    margin-bottom: 10px;
+    font-size: .8rem;
+    color: var(--text-secondary);
+}
+
+.viz-legend-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.viz-swatch {
+    width: 12px;
+    height: 3px;
+    border-radius: 2px;
+    display: inline-block;
+    flex: none;
+}
+
+.viz-plot {
+    position: relative;
+    margin-left: 64px;
+    aspect-ratio: 800 / 340;
+}
+
+.viz-plot svg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+}
+
+.viz-grid {
+    stroke: var(--grid);
+    stroke-width: 1;
+}
+
+.viz-axis {
+    stroke: var(--axis);
+    stroke-width: 1;
+}
+
+.viz-marker {
+    stroke: var(--text-muted);
+    stroke-width: 1;
+    stroke-dasharray: 4 4;
+}
+
+.viz-crosshair {
+    stroke: var(--text-muted);
+    stroke-width: 1;
+}
+
+.viz-line {
+    fill: none;
+    stroke-width: 2;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.viz-dot {
+    stroke: var(--surface-1);
+    stroke-width: 2;
+}
+
+.viz-ytick, .viz-xtick, .viz-marker-label {
+    position: absolute;
+    font-size: .72rem;
+    color: var(--text-muted);
+    font-variant-numeric: tabular-nums;
+    pointer-events: none;
+    white-space: nowrap;
+}
+
+.viz-ytick {
+    left: -64px;
+    width: 58px;
+    text-align: right;
+    transform: translateY(-50%);
+}
+
+.viz-xtick {
+    transform: translateX(-50%);
+}
+
+.viz-marker-label {
+    top: -2px;
+    transform: translateX(6px);
+    color: var(--text-secondary);
+    background: var(--surface-1);
+    padding: 0 4px;
+    border-radius: 4px;
+}
+
+.viz-tooltip {
+    position: absolute;
+    top: 8px;
+    transform: translateX(12px);
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, .12);
+    border-radius: 8px;
+    padding: 8px 10px;
+    font-size: .78rem;
+    color: var(--text-primary);
+    pointer-events: none;
+    min-width: 180px;
+    z-index: 2;
+}
+
+.viz-tooltip.left {
+    transform: translateX(calc(-100% - 12px));
+}
+
+.viz-tooltip-title {
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.viz-tooltip-row {
+    display: grid;
+    grid-template-columns: 12px 1fr auto;
+    align-items: center;
+    gap: 8px;
+}
+
+.viz-tooltip-row strong {
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.viz figcaption {
+    color: var(--text-muted);
+    font-size: .78rem;
+    margin-top: 28px;
+}
+
+/* ---------- Accueil ---------- */
+.hero {
+    padding: 28px;
+    background: linear-gradient(135deg, #0d366b, #1c5cab);
+    color: #fff;
+    border-radius: 14px;
+    margin-bottom: 24px;
+}
+
+.hero h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0 0 8px;
+}
+
+.hero p {
+    margin: 0;
+    opacity: .9;
+    max-width: 62ch;
+}
+
+.hero-figures {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 28px;
+    margin-top: 20px;
+}
+
+.hero-figures div {
+    font-size: .8rem;
+    opacity: .85;
+}
+
+.hero-figures strong {
+    display: block;
+    font-size: 1.6rem;
+    opacity: 1;
+}
+
+.tool-card {
+    padding: 20px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    text-decoration: none;
+    color: inherit;
+    transition: box-shadow .15s ease, transform .15s ease;
+}
+
+.tool-card:hover {
+    box-shadow: 0 6px 20px rgba(0, 0, 0, .10);
+    transform: translateY(-2px);
+}
+
+.tool-card h2 {
+    font-size: 1.05rem;
+    margin: 4px 0 0;
+    color: var(--text-primary);
+}
+
+.tool-card p {
+    margin: 0;
+    color: var(--text-secondary);
+    font-size: .875rem;
+}
+
+/* ---------- Analyse des besoins ---------- */
+.priority {
+    display: inline-block;
+    font-size: .72rem;
+    font-weight: 600;
+    padding: 2px 8px;
+    border-radius: 999px;
+    border: 1px solid currentColor;
+    white-space: nowrap;
+}
+
+.priority.p0 { color: var(--bad); }
+.priority.p1 { color: #c25a00; }
+.priority.p2 { color: var(--series-1); }
+.priority.p3 { color: var(--text-muted); }
+
+.app-root.dark .priority.p1 { color: #ec835a; }
+
+.need {
+    display: grid;
+    grid-template-columns: 28px 1fr;
+    gap: 10px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.need:last-child { border-bottom: 0; }
+
+.need-title {
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    align-items: center;
+}
+
+.need-reason {
+    color: var(--text-secondary);
+    font-size: .875rem;
+    margin-top: 2px;
+}
+
+.score-ring {
+    font-size: 2.2rem;
+    font-weight: 700;
+}
+
+.print-only { display: none; }
+
+/* ---------- Impression / PDF ---------- */
+@media print {
+    .no-print, .mud-appbar, .mud-drawer, .footer { display: none !important; }
+    .print-only { display: block; }
+    .mud-main-content { padding: 0 !important; margin: 0 !important; }
+    .page { padding: 0 !important; max-width: none !important; }
+    .mud-paper { box-shadow: none !important; border: 1px solid #ddd; }
+    .app-root, .app-root.dark {
+        --surface-1: #fff; --text-primary: #000; --text-secondary: #333; --text-muted: #666; --border: #ddd;
+        background: #fff;
+    }
+    body { background: #fff !important; }
+    .print-full { flex-basis: 100% !important; max-width: 100% !important; }
+}
+
+/* ---------- Chargement et erreurs Blazor ---------- */
+.boot {
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.boot-title {
+    position: absolute;
+    inset: calc(20vh - 3rem) 0 auto 0;
+    text-align: center;
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: #0d366b;
+}
+
+#blazor-error-ui {
+    color-scheme: light only;
+    background: lightyellow;
+    bottom: 0;
+    box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    display: none;
+    left: 0;
+    padding: 0.6rem 1.25rem 0.7rem 1.25rem;
+    position: fixed;
+    width: 100%;
+    z-index: 1000;
+}
+
+#blazor-error-ui .dismiss {
+    cursor: pointer;
+    position: absolute;
+    right: 0.75rem;
+    top: 0.5rem;
+}
+
+.loading-progress {
+    position: absolute;
+    display: block;
+    width: 8rem;
+    height: 8rem;
+    inset: 20vh 0 auto 0;
+    margin: 0 auto;
+}
+
+.loading-progress circle {
+    fill: none;
+    stroke: #e0e0e0;
+    stroke-width: 0.6rem;
+    transform-origin: 50% 50%;
+    transform: rotate(-90deg);
+}
+
+.loading-progress circle:last-child {
+    stroke: #1c5cab;
+    stroke-dasharray: calc(3.141 * var(--blazor-load-percentage, 0%) * 0.8), 500%;
+    transition: stroke-dasharray 0.05s ease-in-out;
+}
+
+.loading-progress-text {
+    position: absolute;
+    text-align: center;
+    font-weight: bold;
+    inset: calc(20vh + 3.25rem) 0 auto 0.2rem;
+}
+
+.loading-progress-text:after {
+    content: var(--blazor-load-percentage-text, "Chargement");
+}

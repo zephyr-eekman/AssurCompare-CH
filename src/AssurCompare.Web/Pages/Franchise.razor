@@ -1,0 +1,266 @@
+@page "/franchise"
+@inject PremiumDataService Data
+
+<PageTitle>Simulateur de franchise · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <h1>Simulateur de franchise</h1>
+    <p>
+        Une franchise haute fait baisser la prime, mais on paie plus de sa poche en cas de frais médicaux.
+        Ce simulateur calcule le coût réel de chaque franchise (primes + franchise + quote-part)
+        et le seuil de frais à partir duquel une franchise basse devient rentable.
+    </p>
+</div>
+
+@if (_index is null)
+{
+    <MudProgressLinear Indeterminate Color="Color.Primary" />
+}
+else
+{
+    <MudPaper Class="panel mb-4" Outlined>
+        <MudGrid Spacing="3">
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="string" Label="Canton" Value="_canton" ValueChanged="OnCantonChanged" Variant="Variant.Outlined" Dense>
+                    @foreach (var c in _index.Cantons)
+                    {
+                        <MudSelectItem Value="c.Code">@c.Name (@c.Code)</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            @if (Regions.Length > 1)
+            {
+                <MudItem xs="12" sm="6" md="2">
+                    <MudSelect T="int" Label="Région" @bind-Value="_region" @bind-Value:after="RefreshTariffs" Variant="Variant.Outlined" Dense>
+                        @foreach (var r in Regions)
+                        {
+                            <MudSelectItem Value="r">Région @r</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            }
+            <MudItem xs="12" sm="6" md="3">
+                <MudSelect T="AgeGroup" Label="Classe d'âge" @bind-Value="_age" @bind-Value:after="RefreshTariffs" Variant="Variant.Outlined" Dense>
+                    @foreach (var a in Enum.GetValues<AgeGroup>().Reverse())
+                    {
+                        <MudSelectItem Value="a">@a.Label()</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="2" Class="d-flex align-center">
+                <MudSwitch T="bool" @bind-Value="_withAccident" @bind-Value:after="RefreshTariffs" Color="Color.Primary" Label="Avec accident" />
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudSelect T="string" Label="Caisse et modèle" @bind-Value="_tariffKey" @bind-Value:after="Recompute" Variant="Variant.Outlined" Dense>
+                    @foreach (var t in _tariffChoices)
+                    {
+                        <MudSelectItem Value="t.Key">@t.Label</MudSelectItem>
+                    }
+                </MudSelect>
+            </MudItem>
+            <MudItem xs="12" md="6">
+                <MudText Typo="Typo.caption" Class="muted">Frais médicaux attendus sur une année : <strong>@Chf.Format(_expectedCosts, false)</strong></MudText>
+                <MudSlider T="decimal" @bind-Value="_expectedCosts" @bind-Value:after="Recompute" Min="0" Max="10000" Step="100" Color="Color.Primary" />
+            </MudItem>
+        </MudGrid>
+    </MudPaper>
+
+    @if (_options.Count > 0)
+    {
+        var best = FranchiseAnalyzer.Best(_options, _expectedCosts, _age);
+        var lowest = _options[0];
+        var highest = _options[^1];
+        var bestCost = FranchiseAnalyzer.AnnualTotalCost(best, _expectedCosts, _age);
+        var lowestCost = FranchiseAnalyzer.AnnualTotalCost(lowest, _expectedCosts, _age);
+        var breakEven = FranchiseAnalyzer.BreakEven(lowest, highest, _age);
+
+        <MudGrid Spacing="3" Class="mb-4">
+            <MudItem xs="12" md="4">
+                <MudPaper Class="stat" Outlined>
+                    <div class="stat-label">Franchise la plus avantageuse</div>
+                    <div class="stat-value">CHF @Chf.Number(best.Franchise, false)</div>
+                    <div class="stat-sub">pour @Chf.Format(_expectedCosts, false) de frais par an</div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="stat" Outlined>
+                    <div class="stat-label">Économie par rapport à la franchise @lowest.Franchise</div>
+                    <div class="stat-value @(lowestCost - bestCost > 0 ? "good" : "")">@Chf.Format(lowestCost - bestCost, false)</div>
+                    <div class="stat-sub">par an, coût total @Chf.Format(bestCost, false)</div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" md="4">
+                <MudPaper Class="stat" Outlined>
+                    <div class="stat-label">Seuil de rentabilité @lowest.Franchise / @highest.Franchise</div>
+                    @if (breakEven.HealthCosts is decimal threshold)
+                    {
+                        <div class="stat-value">@Chf.Format(threshold, false)</div>
+                        <div class="stat-sub">de frais par an : au-delà, la franchise @lowest.Franchise est plus rentable</div>
+                    }
+                    else
+                    {
+                        <div class="stat-value">Aucun</div>
+                        <div class="stat-sub">la franchise @highest.Franchise reste toujours la moins chère</div>
+                    }
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <MudPaper Class="panel mb-4" Outlined>
+            <h2 class="section-title">Coût annuel total selon les frais médicaux</h2>
+            <LineChart Series="_series" Markers="Markers" XTitle="Frais médicaux :"
+                       XFormat="@(v => Chf.Number(v, false))" YFormat="@(v => Chf.Number(v, false))"
+                       AriaLabel="Coût annuel total de chaque franchise selon les frais médicaux"
+                       Caption="Coût total = 12 primes mensuelles + franchise + quote-part de 10 % (plafonnée). Survolez le graphique pour voir les montants." />
+        </MudPaper>
+
+        <MudPaper Outlined>
+            <MudSimpleTable Dense Hover Elevation="0">
+                <thead>
+                    <tr>
+                        <th>Franchise</th>
+                        <th class="num">Prime / mois</th>
+                        <th class="num">Primes / an</th>
+                        <th class="num">Coût total pour vos frais</th>
+                        <th class="num">Coût maximal / an</th>
+                        <th>Rentable dès (par rapport à la suivante)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < _options.Count; i++)
+                    {
+                        var o = _options[i];
+                        var isBest = o.Franchise == best.Franchise;
+                        var worst = o.AnnualPremium + o.Franchise + LamalRules.MaxQuotePart(_age);
+                        <tr style="@(isBest ? "font-weight:600" : "")">
+                            <td>
+                                <span class="viz-swatch" style="background:@SeriesColor(i);margin-right:8px"></span>CHF @o.Franchise
+                                @if (isBest)
+                                {
+                                    <MudChip T="string" Size="Size.Small" Color="Color.Success" Variant="Variant.Text">meilleur choix</MudChip>
+                                }
+                            </td>
+                            <td class="num">@Chf.Format(o.MonthlyPremium)</td>
+                            <td class="num">@Chf.Format(o.AnnualPremium, false)</td>
+                            <td class="num">@Chf.Format(FranchiseAnalyzer.AnnualTotalCost(o, _expectedCosts, _age), false)</td>
+                            <td class="num">@Chf.Format(worst, false)</td>
+                            <td>
+                                @if (i < _options.Count - 1)
+                                {
+                                    var pair = FranchiseAnalyzer.BreakEven(o, _options[i + 1], _age);
+                                    @(pair.HealthCosts is decimal t
+                                        ? $"dès {Chf.Format(t, false)} de frais (vs {_options[i + 1].Franchise})"
+                                        : $"jamais (vs {_options[i + 1].Franchise})")
+                                }
+                                else
+                                {
+                                    <span class="muted">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </MudSimpleTable>
+        </MudPaper>
+    }
+    else if (!_loading)
+    {
+        <MudAlert Severity="Severity.Info">Aucun tarif trouvé pour ces critères.</MudAlert>
+    }
+}
+
+@code {
+    private sealed record TariffChoice(string Key, string Label);
+
+    private PremiumIndex? _index;
+    private IReadOnlyList<PremiumOffer> _offers = [];
+    private List<TariffChoice> _tariffChoices = [];
+    private List<FranchiseOption> _options = [];
+    private IReadOnlyList<LineChart.Line> _series = [];
+    private bool _loading = true;
+
+    private string _canton = "NE";
+    private int _region;
+    private AgeGroup _age = AgeGroup.Adulte;
+    private bool _withAccident = true;
+    private string? _tariffKey;
+    private decimal _expectedCosts = 1000;
+
+    private int[] Regions => _index?.Cantons.FirstOrDefault(c => c.Code == _canton)?.Regions ?? [0];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _index = await Data.GetIndexAsync();
+        await LoadCanton();
+    }
+
+    private async Task OnCantonChanged(string canton)
+    {
+        _canton = canton;
+        await LoadCanton();
+    }
+
+    private async Task LoadCanton()
+    {
+        _loading = true;
+        _region = Regions[0];
+        _offers = await Data.GetOffersAsync(_canton);
+        _loading = false;
+        RefreshTariffs();
+    }
+
+    private IEnumerable<PremiumOffer> Matching =>
+        _offers.Where(o => o.Region == _region && o.Age == _age && o.WithAccident == _withAccident);
+
+    private void RefreshTariffs()
+    {
+        var franchiseCount = LamalRules.Franchises(_age).Count;
+        var tariffs = Matching
+            .GroupBy(o => Key(o))
+            .Where(g => g.Count() == franchiseCount)
+            .Select(g => g.First())
+            .ToList();
+
+        _tariffChoices = tariffs
+            .OrderBy(o => o.Insurer.Name).ThenBy(o => o.Tariff.Name)
+            .Select(o => new TariffChoice(Key(o), $"{o.Insurer.Name} · {o.Tariff.Name} ({o.Tariff.Type.Label()})"))
+            .ToList();
+
+        // Par défaut : le modèle standard le moins cher, un exemple réaliste.
+        if (_tariffChoices.All(t => t.Key != _tariffKey))
+        {
+            _tariffKey = Matching
+                .Where(o => o.Tariff.Type == TariffType.Standard && o.Franchise == LamalRules.DefaultFranchise(_age))
+                .OrderBy(o => o.MonthlyPremium)
+                .Select(Key)
+                .FirstOrDefault() ?? _tariffChoices.FirstOrDefault()?.Key;
+        }
+        Recompute();
+    }
+
+    private void Recompute()
+    {
+        _options = Matching
+            .Where(o => Key(o) == _tariffKey)
+            .OrderBy(o => o.Franchise)
+            .Select(o => new FranchiseOption(o.Franchise, o.MonthlyPremium))
+            .ToList();
+
+        var max = _age == AgeGroup.Enfant ? 5_000m : 10_000m;
+        _series = _options
+            .Select((o, i) => new LineChart.Line(
+                $"Franchise {o.Franchise}",
+                SeriesColor(i),
+                // Pas de 100.- : les cassures (franchise, plafond de quote-part) tombent pile sur un point.
+                FranchiseAnalyzer.Curve(o, _age, max, 100).Select(p => (p.HealthCosts, p.TotalCost)).ToList()))
+            .ToList();
+    }
+
+    private IReadOnlyList<LineChart.Marker> Markers =>
+        [new LineChart.Marker(Math.Min(_expectedCosts, _age == AgeGroup.Enfant ? 5_000m : 10_000m), "Vos frais")];
+
+    private static string Key(PremiumOffer o) => $"{o.Insurer.Id}|{o.Tariff.Code}";
+
+    // Couleur fixe par rang de franchise (300 = 1re couleur, 500 = 2e...).
+    private static string SeriesColor(int index) => $"var(--series-{index + 1})";
+}

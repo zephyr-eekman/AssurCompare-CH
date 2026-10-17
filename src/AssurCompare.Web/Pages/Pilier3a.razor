@@ -1,0 +1,125 @@
+@page "/pilier-3a"
+@using AssurCompare.Core.Prevoyance
+
+<PageTitle>Calculateur 3e pilier · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <h1>Calculateur 3e pilier (3a)</h1>
+    <p>
+        Combien rapporte un 3e pilier par rapport à un simple compte épargne ? Le calcul tient compte
+        du rendement composé et de l'économie d'impôt réalisée chaque année grâce à la déduction des versements.
+    </p>
+</div>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="4">
+        <MudPaper Class="panel" Outlined>
+            <h2 class="section-title">Hypothèses</h2>
+            <MudStack Spacing="3">
+                <MudSwitch T="bool" @bind-Value="_hasPensionFund" @bind-Value:after="Recompute" Color="Color.Primary"
+                           Label="Affilié à une caisse de pension (2e pilier)" />
+                <MudNumericField T="decimal" Label="Versement annuel" @bind-Value="_contribution" @bind-Value:after="Recompute"
+                                 Min="0" Max="50000" Step="500" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Adornment="Adornment.Start" AdornmentText="CHF"
+                                 HelperText="@($"Maximum {Pillar3aCalculator.ReferenceYear} : {Chf.Format(Pillar3aCalculator.LegalMaximum(_hasPensionFund), false)}" + (_hasPensionFund ? "" : " (20 % du revenu au plus)"))" />
+                <MudNumericField T="int" Label="Âge actuel" @bind-Value="_age" @bind-Value:after="Recompute"
+                                 Min="18" Max="64" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 HelperText="@($"Simulation jusqu'à 65 ans : {Years} ans")" />
+                <MudNumericField T="decimal" Label="Rendement annuel attendu" @bind-Value="_return" @bind-Value:after="Recompute"
+                                 Min="-5" Max="10" Step="0.5m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Adornment="Adornment.End" AdornmentText="%" HelperText="Compte 3a ou solution en fonds" />
+                <MudNumericField T="decimal" Label="Taux d'imposition marginal" @bind-Value="_taxRate" @bind-Value:after="Recompute"
+                                 Min="0" Max="50" Step="1" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Adornment="Adornment.End" AdornmentText="%" HelperText="Dépend du revenu, du canton et de la commune" />
+                <MudNumericField T="decimal" Label="Taux du compte épargne (comparaison)" @bind-Value="_savingsRate" @bind-Value:after="Recompute"
+                                 Min="0" Max="5" Step="0.25m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                                 Adornment="Adornment.End" AdornmentText="%" />
+            </MudStack>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="8">
+        @if (_result is not null)
+        {
+            var final = _result.Final;
+            if (_result.ExceedsLegalMaximum)
+            {
+                <MudAlert Severity="Severity.Warning" Class="mb-3">
+                    Le versement dépasse le maximum légal @Pillar3aCalculator.ReferenceYear (@Chf.Format(Pillar3aCalculator.LegalMaximum(_hasPensionFund), false)).
+                    Le surplus ne serait pas déductible.
+                </MudAlert>
+            }
+            <MudGrid Spacing="3" Class="mb-3">
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="stat" Outlined>
+                        <div class="stat-label">Capital à 65 ans</div>
+                        <div class="stat-value">@Chf.Format(final.Capital3a, false)</div>
+                        <div class="stat-sub">dont @Chf.Format(_result.InvestmentGain, false) de rendement</div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="stat" Outlined>
+                        <div class="stat-label">Total versé</div>
+                        <div class="stat-value">@Chf.Format(final.TotalContributions, false)</div>
+                        <div class="stat-sub">en @Years ans</div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="stat" Outlined>
+                        <div class="stat-label">Impôts économisés</div>
+                        <div class="stat-value good">@Chf.Format(final.TaxSavings, false)</div>
+                        <div class="stat-sub">@Chf.Format(_contribution * _taxRate / 100, false) par an</div>
+                    </MudPaper>
+                </MudItem>
+                <MudItem xs="6" md="3">
+                    <MudPaper Class="stat" Outlined>
+                        <div class="stat-label">Avantage vs compte épargne</div>
+                        <div class="stat-value @(_result.AdvantageVsSavingsAccount > 0 ? "good" : "bad")">@Chf.Format(_result.AdvantageVsSavingsAccount, false)</div>
+                        <div class="stat-sub">capital + impôts économisés</div>
+                    </MudPaper>
+                </MudItem>
+            </MudGrid>
+
+            <MudPaper Class="panel" Outlined>
+                <h2 class="section-title">Évolution du capital</h2>
+                <LineChart Series="_series" XTitle="Âge :" StartYAtZero
+                           XFormat="@(v => $"{v:0} ans")" YFormat="@(v => Chf.Number(v, false))"
+                           AriaLabel="Évolution du capital 3e pilier comparée à un compte épargne"
+                           Caption="Versement en fin d'année, rendement constant. L'impôt réduit au moment du retrait n'est pas pris en compte." />
+            </MudPaper>
+        }
+    </MudItem>
+</MudGrid>
+
+@code {
+    private bool _hasPensionFund = true;
+    private decimal _contribution = Pillar3aCalculator.MaxWithPensionFund;
+    private int _age = 28;
+    private decimal _return = 3m;
+    private decimal _taxRate = 25m;
+    private decimal _savingsRate = 0.5m;
+
+    private Pillar3aResult? _result;
+    private IReadOnlyList<LineChart.Line> _series = [];
+
+    private int Years => Math.Max(1, 65 - _age);
+
+    protected override void OnInitialized() => Recompute();
+
+    private void Recompute()
+    {
+        _result = Pillar3aCalculator.Simulate(new Pillar3aInput(_contribution, Years, _return, _taxRate, _savingsRate, _hasPensionFund));
+
+        (decimal, decimal) Point(int year, decimal value) => (_age + year, value);
+        var start = new[] { Point(0, 0) };
+        _series =
+        [
+            new("3e pilier + impôts économisés", "var(--series-1)",
+                start.Concat(_result.Years.Select(y => Point(y.Year, y.Capital3a + y.TaxSavings))).ToList()),
+            new("3e pilier", "var(--series-3)",
+                start.Concat(_result.Years.Select(y => Point(y.Year, y.Capital3a))).ToList()),
+            new("Compte épargne", "var(--series-2)",
+                start.Concat(_result.Years.Select(y => Point(y.Year, y.CapitalSavingsAccount))).ToList()),
+        ];
+    }
+}

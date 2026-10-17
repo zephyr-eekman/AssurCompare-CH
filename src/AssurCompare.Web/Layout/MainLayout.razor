@@ -1,0 +1,91 @@
+@inherits LayoutComponentBase
+
+<MudThemeProvider @ref="_themeProvider" Theme="_theme" @bind-IsDarkMode="_isDark" ObserveSystemDarkModeChange="true" />
+<MudPopoverProvider />
+<MudDialogProvider />
+<MudSnackbarProvider />
+
+<div class="app-root @(_isDark ? "dark" : "")">
+    <MudLayout>
+        <MudAppBar Elevation="0" Class="no-print app-bar">
+            <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit" Edge="Edge.Start"
+                           OnClick="() => _drawerOpen = !_drawerOpen" aria-label="Menu" />
+            <MudText Typo="Typo.h6" Class="ml-2 app-title">AssurCompare <span class="ch">CH</span></MudText>
+            <MudSpacer />
+            <MudChip T="string" Size="Size.Small" Variant="Variant.Outlined" Color="Color.Inherit" Class="data-chip">
+                Primes LAMal 2027 · OFSP
+            </MudChip>
+            <MudIconButton Icon="@(_isDark ? Icons.Material.Filled.LightMode : Icons.Material.Filled.DarkMode)"
+                           Color="Color.Inherit" OnClick="() => _isDark = !_isDark"
+                           aria-label="Changer de thème" />
+        </MudAppBar>
+
+        <MudDrawer @bind-Open="_drawerOpen" ClipMode="DrawerClipMode.Always" Elevation="0"
+                   Variant="DrawerVariant.Responsive" Class="no-print">
+            <MudNavMenu Class="pt-2">
+                <MudNavLink Href="" Match="NavLinkMatch.All" Icon="@Icons.Material.Outlined.Dashboard">Accueil</MudNavLink>
+                <MudText Typo="Typo.overline" Class="px-4 pt-3 nav-section">Santé (LAMal)</MudText>
+                <MudNavLink Href="comparateur" Icon="@Icons.Material.Outlined.CompareArrows">Comparateur de primes</MudNavLink>
+                <MudNavLink Href="franchise" Icon="@Icons.Material.Outlined.ShowChart">Simulateur de franchise</MudNavLink>
+                <MudText Typo="Typo.overline" Class="px-4 pt-3 nav-section">Conseil</MudText>
+                <MudNavLink Href="besoins" Icon="@Icons.Material.Outlined.FactCheck">Analyse des besoins</MudNavLink>
+                <MudNavLink Href="offres" Icon="@Icons.Material.Outlined.RequestQuote">Comparateur d'offres</MudNavLink>
+                <MudNavLink Href="pilier-3a" Icon="@Icons.Material.Outlined.Savings">Calculateur 3e pilier</MudNavLink>
+                <MudDivider Class="my-3" />
+                <MudNavLink Href="methode" Icon="@Icons.Material.Outlined.Info">Méthode et sources</MudNavLink>
+            </MudNavMenu>
+        </MudDrawer>
+
+        <MudMainContent>
+            <MudContainer MaxWidth="MaxWidth.Large" Class="page">
+                @Body
+            </MudContainer>
+            <footer class="footer no-print">
+                Projet personnel de Zéphyr Eekman, réalisé avec l'aide de l'IA. Données : Office fédéral de la santé publique (OFSP).
+                Outil indicatif, ne remplace pas une offre officielle.
+            </footer>
+        </MudMainContent>
+    </MudLayout>
+</div>
+
+@code {
+    private MudThemeProvider _themeProvider = default!;
+    private bool _isDark;
+    private bool _drawerOpen = true;
+
+    private readonly MudTheme _theme = new()
+    {
+        PaletteLight = new PaletteLight
+        {
+            Primary = "#1c5cab",
+            Secondary = "#199e70",
+            AppbarBackground = "#0d366b",
+            Background = "#f6f7f9",
+            Surface = "#ffffff",
+            DrawerBackground = "#ffffff",
+            TextPrimary = "#0b0b0b",
+            TextSecondary = "#52514e",
+        },
+        PaletteDark = new PaletteDark
+        {
+            Primary = "#5598e7",
+            Secondary = "#1baf7a",
+            AppbarBackground = "#10233f",
+            Background = "#0f1115",
+            Surface = "#1a1b1e",
+            DrawerBackground = "#15161a",
+            TextPrimary = "#f0efec",
+            TextSecondary = "#c3c2b7",
+        },
+        LayoutProperties = new LayoutProperties { DefaultBorderRadius = "10px" },
+    };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _isDark = await _themeProvider.GetSystemDarkModeAsync();
+            StateHasChanged();
+        }
+    }
+}

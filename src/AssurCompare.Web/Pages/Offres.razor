@@ -1,0 +1,192 @@
+@page "/offres"
+@using AssurCompare.Core.Offres
+
+<PageTitle>Comparateur d'offres · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <h1>Comparateur d'offres</h1>
+    <p>
+        Pour une assurance auto, ménage ou RC, la prime la plus basse n'est pas toujours la meilleure affaire.
+        Saisissez jusqu'à quatre offres et une hypothèse de sinistres : l'outil calcule le coût total attendu
+        sur la période (primes + ce qui reste à la charge du client).
+    </p>
+</div>
+
+<MudPaper Class="panel mb-4" Outlined>
+    <h2 class="section-title">Offres à comparer</h2>
+    <MudGrid Spacing="3">
+        @for (var i = 0; i < _offers.Count; i++)
+        {
+            var offer = _offers[i];
+            var index = i;
+            <MudItem xs="12" sm="6" lg="3">
+                <MudPaper Class="pa-3" Outlined>
+                    <MudStack Spacing="2">
+                        <div class="d-flex align-center">
+                            <MudTextField T="string" Label="Nom de l'offre" @bind-Value="offer.Name" @bind-Value:after="Recompute"
+                                          Variant="Variant.Outlined" Margin="Margin.Dense" />
+                            @if (_offers.Count > 2)
+                            {
+                                <MudIconButton Icon="@Icons.Material.Outlined.Delete" Size="Size.Small" aria-label="Retirer l'offre"
+                                               OnClick="() => Remove(index)" />
+                            }
+                        </div>
+                        <MudNumericField T="decimal" Label="Prime annuelle" @bind-Value="offer.Premium" @bind-Value:after="Recompute"
+                                         Min="0" Step="50" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF" />
+                        <MudNumericField T="decimal" Label="Franchise par sinistre" @bind-Value="offer.Deductible" @bind-Value:after="Recompute"
+                                         Min="0" Step="100" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF" />
+                        <MudNumericField T="decimal" Label="Somme d'assurance (0 = illimitée)" @bind-Value="offer.Limit" @bind-Value:after="Recompute"
+                                         Min="0" Step="1000" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF" />
+                        <MudNumericField T="decimal" Label="Hausse de prime par an" @bind-Value="offer.Increase" @bind-Value:after="Recompute"
+                                         Min="0" Max="20" Step="0.5m" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentText="%" />
+                    </MudStack>
+                </MudPaper>
+            </MudItem>
+        }
+    </MudGrid>
+    @if (_offers.Count < 4)
+    {
+        <MudButton Class="mt-3" Variant="Variant.Text" Color="Color.Primary" StartIcon="@Icons.Material.Filled.Add" OnClick="Add">Ajouter une offre</MudButton>
+    }
+
+    <MudDivider Class="my-4" />
+    <h2 class="section-title">Hypothèse de sinistres</h2>
+    <MudGrid Spacing="3">
+        <MudItem xs="12" sm="4">
+            <MudNumericField T="decimal" Label="Sinistres par an (moyenne)" @bind-Value="_claimsPerYear" @bind-Value:after="Recompute"
+                             Min="0" Max="5" Step="0.1m" Variant="Variant.Outlined" Margin="Margin.Dense"
+                             HelperText="Ex. 0.2 = un sinistre tous les 5 ans" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudNumericField T="decimal" Label="Montant moyen d'un sinistre" @bind-Value="_averageClaim" @bind-Value:after="Recompute"
+                             Min="0" Step="500" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.Start" AdornmentText="CHF" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudNumericField T="int" Label="Durée de comparaison" @bind-Value="_years" @bind-Value:after="Recompute"
+                             Min="1" Max="20" Variant="Variant.Outlined" Margin="Margin.Dense" Adornment="Adornment.End" AdornmentText="ans" />
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_results.Count > 0)
+{
+    var best = _results[0];
+    var cheapestPremium = _results.MinBy(r => r.Offer.AnnualPremium)!;
+
+    <MudAlert Severity="Severity.Success" Class="mb-4" Icon="@Icons.Material.Outlined.EmojiEvents">
+        <strong>@best.Offer.Name</strong> est l'offre la plus avantageuse sur @_years ans :
+        @Chf.Format(best.TotalExpectedCost, false) au total.
+        @if (cheapestPremium.Offer != best.Offer)
+        {
+            <span>
+                L'offre à la prime la plus basse (@cheapestPremium.Offer.Name) coûterait
+                <strong>@Chf.Format(cheapestPremium.DifferenceVsBest, false)</strong> de plus avec cette hypothèse de sinistres.
+            </span>
+        }
+    </MudAlert>
+
+    <MudGrid Spacing="3">
+        <MudItem xs="12" md="5">
+            <MudPaper Class="panel" Outlined>
+                <h2 class="section-title">Coût total attendu sur @_years ans</h2>
+                @{ var max = _results.Max(r => r.TotalExpectedCost); }
+                <div class="bars">
+                    @foreach (var r in _results)
+                    {
+                        <div class="bar-row @(r.Rank == 1 ? "highlight" : "")" title="@($"Primes {Chf.Format(r.TotalPremiums, false)} + à charge {Chf.Format(r.TotalOutOfPocket, false)}")">
+                            <span class="bar-name">@r.Rank. @r.Offer.Name</span>
+                            <span class="bar-track"><span class="bar-fill" style="display:block;width:@Width(r.TotalExpectedCost, max)"></span></span>
+                            <span class="bar-value">@Chf.Format(r.TotalExpectedCost, false)</span>
+                        </div>
+                    }
+                </div>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="12" md="7">
+            <MudPaper Outlined>
+                <MudSimpleTable Dense Elevation="0">
+                    <thead>
+                        <tr>
+                            <th>Offre</th>
+                            <th class="num">Primes</th>
+                            <th class="num">À charge / sinistre</th>
+                            <th class="num">À charge total</th>
+                            <th class="num">Coût total</th>
+                            <th class="num">Écart</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var r in _results)
+                        {
+                            <tr>
+                                <td>
+                                    @r.Offer.Name
+                                    @if (r.CoverageInsufficient)
+                                    {
+                                        <div class="bad" style="font-size:.75rem">Somme d'assurance insuffisante</div>
+                                    }
+                                </td>
+                                <td class="num">@Chf.Format(r.TotalPremiums, false)</td>
+                                <td class="num">@Chf.Format(r.OutOfPocketPerClaim, false)</td>
+                                <td class="num">@Chf.Format(r.TotalOutOfPocket, false)</td>
+                                <td class="num"><strong>@Chf.Format(r.TotalExpectedCost, false)</strong></td>
+                                <td class="num @(r.DifferenceVsBest > 0 ? "bad" : "")">@(r.DifferenceVsBest == 0 ? "meilleure" : "+" + Chf.Number(r.DifferenceVsBest, false))</td>
+                            </tr>
+                        }
+                    </tbody>
+                </MudSimpleTable>
+            </MudPaper>
+            <MudText Typo="Typo.caption" Class="muted d-block mt-2">
+                À charge total = (franchise + part au-delà de la somme d'assurance) × sinistres par an × durée. C'est une espérance, pas une garantie.
+            </MudText>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    private sealed class EditableOffer(string name, decimal premium, decimal deductible, decimal limit = 0, decimal increase = 0)
+    {
+        public string Name { get; set; } = name;
+        public decimal Premium { get; set; } = premium;
+        public decimal Deductible { get; set; } = deductible;
+        public decimal Limit { get; set; } = limit;
+        public decimal Increase { get; set; } = increase;
+
+        public InsuranceOffer ToOffer() => new(Name, Premium, Deductible, Limit, Increase);
+    }
+
+    // Exemple fictif : trois offres d'assurance ménage.
+    private readonly List<EditableOffer> _offers =
+    [
+        new("Offre A · prime basse", 290, 500),
+        new("Offre B · équilibrée", 340, 200),
+        new("Offre C · tout compris", 410, 0),
+    ];
+
+    private decimal _claimsPerYear = 0.3m;
+    private decimal _averageClaim = 1_500;
+    private int _years = 5;
+    private IReadOnlyList<OfferResult> _results = [];
+
+    protected override void OnInitialized() => Recompute();
+
+    private void Add()
+    {
+        _offers.Add(new EditableOffer($"Offre {(char)('A' + _offers.Count)}", 350, 200));
+        Recompute();
+    }
+
+    private void Remove(int index)
+    {
+        _offers.RemoveAt(index);
+        Recompute();
+    }
+
+    private void Recompute()
+    {
+        _results = _years < 1 ? [] : OfferComparer.Compare(_offers.Select(o => o.ToOffer()), new ClaimScenario(_claimsPerYear, _averageClaim, _years));
+    }
+
+    private static string Width(decimal value, decimal max) =>
+        (max == 0 ? 0 : value / max * 100).ToString("0.#", System.Globalization.CultureInfo.InvariantCulture) + "%";
+}

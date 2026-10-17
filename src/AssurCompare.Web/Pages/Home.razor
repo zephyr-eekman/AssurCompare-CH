@@ -1,0 +1,60 @@
+@page "/"
+@inject PremiumDataService Data
+
+<PageTitle>AssurCompare CH · Outils d'aide au conseil en assurance</PageTitle>
+
+<section class="hero">
+    <h1>Des chiffres clairs pour conseiller le client</h1>
+    <p>
+        AssurCompare CH réunit les calculs qu'un conseiller en assurance fait au quotidien :
+        comparer les primes, choisir la bonne franchise, chiffrer un 3e pilier et repérer les lacunes de couverture.
+    </p>
+    @if (_index is not null)
+    {
+        <div class="hero-figures">
+            <div><strong>@_index.Year</strong>primes officielles</div>
+            <div><strong>@_index.Insurers.Count</strong>caisses-maladie</div>
+            <div><strong>@_index.Cantons.Count</strong>cantons</div>
+            <div><strong>5</strong>outils de calcul</div>
+        </div>
+    }
+</section>
+
+<MudGrid Spacing="3">
+    @foreach (var tool in Tools)
+    {
+        <MudItem xs="12" sm="6" md="4">
+            <MudPaper Outlined Class="tool-card" Style="cursor:pointer" @onclick="() => Nav.NavigateTo(tool.Href)">
+                <MudIcon Icon="@tool.Icon" Color="Color.Primary" Size="Size.Large" />
+                <h2>@tool.Title</h2>
+                <p>@tool.Description</p>
+            </MudPaper>
+        </MudItem>
+    }
+</MudGrid>
+
+@code {
+    [Inject] private NavigationManager Nav { get; set; } = default!;
+
+    private PremiumIndex? _index;
+
+    private sealed record Tool(string Href, string Icon, string Title, string Description);
+
+    private static readonly Tool[] Tools =
+    [
+        new("comparateur", Icons.Material.Outlined.CompareArrows, "Comparateur de primes LAMal",
+            "Toutes les caisses d'un canton classées pour un profil donné, avec l'économie annuelle par rapport à la caisse actuelle."),
+        new("franchise", Icons.Material.Outlined.ShowChart, "Simulateur de franchise",
+            "Coût réel de chaque franchise et seuil de rentabilité : à partir de combien de frais la franchise basse vaut-elle la peine ?"),
+        new("besoins", Icons.Material.Outlined.FactCheck, "Analyse des besoins",
+            "Profil du client, couvertures obligatoires, lacunes prioritaires et pistes d'économie. Fiche imprimable en PDF."),
+        new("offres", Icons.Material.Outlined.RequestQuote, "Comparateur d'offres",
+            "Auto, ménage, RC : compare le coût total sur plusieurs années, pas seulement la prime."),
+        new("pilier-3a", Icons.Material.Outlined.Savings, "Calculateur 3e pilier",
+            "Capital à la retraite, impôts économisés et comparaison avec un compte épargne."),
+        new("methode", Icons.Material.Outlined.Info, "Méthode et sources",
+            "D'où viennent les données, quelles formules sont utilisées et quelles sont les limites."),
+    ];
+
+    protected override async Task OnInitializedAsync() => _index = await Data.GetIndexAsync();
+}

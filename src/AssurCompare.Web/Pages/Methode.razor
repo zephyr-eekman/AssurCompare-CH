@@ -1,0 +1,83 @@
+@page "/methode"
+@using AssurCompare.Core.Prevoyance
+@inject PremiumDataService Data
+
+<PageTitle>Méthode et sources · AssurCompare CH</PageTitle>
+
+<div class="page-header">
+    <h1>Méthode et sources</h1>
+    <p>Comment les chiffres sont calculés, d'où ils viennent et ce que l'outil ne fait pas.</p>
+</div>
+
+<MudGrid Spacing="3">
+    <MudItem xs="12" md="6">
+        <MudPaper Class="panel" Outlined>
+            <h2 class="section-title">Données</h2>
+            <p>
+                Les primes viennent du jeu de données officiel <em>Primes de l'assurance-maladie</em> publié par
+                l'Office fédéral de la santé publique (OFSP) sur opendata.swiss@(_index is null ? "" : $", primes {_index.Year}").
+                Les noms des caisses viennent de la liste officielle des assureurs-maladie admis (OFSP, état au 1.1.2026).
+            </p>
+            <p>
+                Un petit programme (<code>AssurCompare.DataPrep</code>) convertit le fichier brut d'environ 220 000 lignes
+                en un fichier léger par canton, téléchargé seulement quand on choisit ce canton.
+                Seules les primes standard par classe d'âge sont gardées (sans les rabais dès le 2e ou 3e enfant).
+            </p>
+            @if (_index is not null)
+            {
+                <p class="muted">Données préparées le @_index.GeneratedOn.ToString("dd.MM.yyyy").</p>
+            }
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="panel" Outlined>
+            <h2 class="section-title">Participation aux coûts LAMal</h2>
+            <p>Pour une année de frais médicaux <em>F</em> et une franchise <em>f</em> :</p>
+            <ul>
+                <li>franchise payée = le plus petit de <em>F</em> et <em>f</em> ;</li>
+                <li>quote-part = 10 % du reste, au maximum CHF 700 (CHF 350 pour un enfant) ;</li>
+                <li>coût total = 12 primes mensuelles + franchise payée + quote-part.</li>
+            </ul>
+            <p>
+                Le seuil de rentabilité entre deux franchises est le montant de frais où les deux coûts totaux sont égaux.
+                Il est trouvé par dichotomie : on coupe l'intervalle en deux jusqu'à une précision d'un centime.
+            </p>
+            <p class="muted">La contribution aux frais de séjour hospitalier (CHF 15 par jour) n'est pas modélisée.</p>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="panel" Outlined>
+            <h2 class="section-title">3e pilier et offres</h2>
+            <ul>
+                <li>3e pilier : versement en fin d'année, rendement constant, économie d'impôt = versement × taux marginal.
+                    Maximum @Pillar3aCalculator.ReferenceYear : @Chf.Format(Pillar3aCalculator.MaxWithPensionFund, false) avec 2e pilier,
+                    @Chf.Format(Pillar3aCalculator.MaxWithoutPensionFund, false) sans. L'impôt au moment du retrait n'est pas modélisé.</li>
+                <li>Offres : coût attendu = primes + (franchise + part au-delà de la somme d'assurance) × nombre moyen de sinistres.</li>
+            </ul>
+        </MudPaper>
+    </MudItem>
+
+    <MudItem xs="12" md="6">
+        <MudPaper Class="panel" Outlined>
+            <h2 class="section-title">Technique</h2>
+            <ul>
+                <li>C# et .NET 10, Blazor WebAssembly : l'application tourne entièrement dans le navigateur, sans serveur.</li>
+                <li>Interface MudBlazor, graphiques SVG faits maison.</li>
+                <li>Calculs isolés dans une bibliothèque séparée (<code>AssurCompare.Core</code>) et couverts par des tests automatiques (xUnit).</li>
+                <li>Publication automatique sur GitHub Pages après le passage des tests (GitHub Actions).</li>
+            </ul>
+            <p class="muted">
+                Projet personnel de Zéphyr Eekman, réalisé avec l'aide de l'IA, pour illustrer sa motivation pour le conseil en assurance.
+                Outil indicatif : il ne remplace ni une offre officielle d'un assureur ni le site priminfo.admin.ch.
+            </p>
+        </MudPaper>
+    </MudItem>
+</MudGrid>
+
+@code {
+    private PremiumIndex? _index;
+
+    protected override async Task OnInitializedAsync() => _index = await Data.GetIndexAsync();
+}
